@@ -5,22 +5,22 @@
 'use strict';
 
 import errors = require('vs/base/common/errors');
-import { Promise, TPromise, ValueCallback, ErrorCallback, ProgressCallback } from 'vs/base/common/winjs.base';
+import { Promise as WinJSPromise, TPromise as WinJSTPromise, ValueCallback, ErrorCallback, ProgressCallback } from 'vs/base/common/winjs.base';
 import platform = require('vs/base/common/platform');
 import {CancellationTokenSource} from 'vs/base/common/cancellation';
 
 export interface PromiseLike<T> {
 	/**
-	 * Attaches callbacks for the resolution and/or rejection of the Promise.
-	 * @param onfulfilled The callback to execute when the Promise is resolved.
-	 * @param onrejected The callback to execute when the Promise is rejected.
-	 * @returns A Promise for the completion of which ever callback is executed.
+	 * Attaches callbacks for the resolution and/or rejection of the WinJSPromise.
+	 * @param onfulfilled The callback to execute when the WinJSPromise is resolved.
+	 * @param onrejected The callback to execute when the WinJSPromise is rejected.
+	 * @returns A WinJSPromise for the completion of which ever callback is executed.
 	*/
 	then<TResult>(onfulfilled?: (value: T) => TResult | PromiseLike<TResult>, onrejected?: (reason: any) => TResult | PromiseLike<TResult>): PromiseLike<TResult>;
 	then<TResult>(onfulfilled?: (value: T) => TResult | PromiseLike<TResult>, onrejected?: (reason: any) => void): PromiseLike<TResult>;
 }
 
-export function wrapAsWinJSPromise<T>(callback: (...args: any[]) => PromiseLike<T>, context: any): (...args: any[]) => TPromise<T> {
+export function wrapAsWinJSPromise<T>(callback: (...args: any[]) => PromiseLike<T>, context: any): (...args: any[]) => WinJSTPromise<T> {
 
 	if (!callback) {
 		return;
@@ -30,7 +30,7 @@ export function wrapAsWinJSPromise<T>(callback: (...args: any[]) => PromiseLike<
 
 		let source = new CancellationTokenSource();
 
-		return new TPromise<T>((c, e) => {
+		return new WinJSTPromise<T>((c, e) => {
 
 			args.push(source.token);
 			let value = callback.apply(context, args);
@@ -75,9 +75,9 @@ export interface ITask<T> {
  */
 export class Throttler {
 
-	private activePromise: Promise;
-	private queuedPromise: Promise;
-	private queuedPromiseFactory: ITask<Promise>;
+	private activePromise: WinJSPromise;
+	private queuedPromise: WinJSPromise;
+	private queuedPromiseFactory: ITask<WinJSPromise>;
 
 	constructor() {
 		this.activePromise = null;
@@ -85,7 +85,7 @@ export class Throttler {
 		this.queuedPromiseFactory = null;
 	}
 
-	public queue<T>(promiseFactory: ITask<TPromise<T>>): TPromise<T> {
+	public queue<T>(promiseFactory: ITask<WinJSTPromise<T>>): WinJSTPromise<T> {
 		if (this.activePromise) {
 			this.queuedPromiseFactory = promiseFactory;
 
@@ -99,14 +99,14 @@ export class Throttler {
 					return result;
 				};
 
-				this.queuedPromise = new Promise((c, e, p) => {
+				this.queuedPromise = new WinJSPromise((c, e, p) => {
 					this.activePromise.then(onComplete, onComplete, p).done(c);
 				}, () => {
 					this.activePromise.cancel();
 				});
 			}
 
-			return new Promise((c, e, p) => {
+			return new WinJSPromise((c, e, p) => {
 				this.queuedPromise.then(c, e, p);
 			}, () => {
 				// no-op
@@ -115,7 +115,7 @@ export class Throttler {
 
 		this.activePromise = promiseFactory();
 
-		return new Promise((c, e, p) => {
+		return new WinJSPromise((c, e, p) => {
 			this.activePromise.done((result: any) => {
 				this.activePromise = null;
 				c(result);
@@ -156,7 +156,7 @@ export class Delayer<T> {
 
 	public defaultDelay: number;
 	private timeout: number;
-	private completionPromise: Promise;
+	private completionPromise: WinJSPromise;
 	private onSuccess: ValueCallback;
 	private task: ITask<T>;
 
@@ -168,12 +168,12 @@ export class Delayer<T> {
 		this.task = null;
 	}
 
-	public trigger(task: ITask<T>, delay: number = this.defaultDelay): TPromise<T> {
+	public trigger(task: ITask<T>, delay: number = this.defaultDelay): WinJSTPromise<T> {
 		this.task = task;
 		this.cancelTimeout();
 
 		if (!this.completionPromise) {
-			this.completionPromise = new Promise((c) => {
+			this.completionPromise = new WinJSPromise((c) => {
 				this.onSuccess = c;
 			}, () => {
 				// no-op
@@ -224,7 +224,7 @@ export class Delayer<T> {
  * Simply combine the two mail man strategies from the Throttler and Delayer
  * helpers, for an analogy.
  */
-export class ThrottledDelayer<T> extends Delayer<TPromise<T>> {
+export class ThrottledDelayer<T> extends Delayer<WinJSTPromise<T>> {
 
 	private throttler: Throttler;
 
@@ -234,7 +234,7 @@ export class ThrottledDelayer<T> extends Delayer<TPromise<T>> {
 		this.throttler = new Throttler();
 	}
 
-	public trigger(promiseFactory: ITask<TPromise<T>>, delay?: number): Promise {
+	public trigger(promiseFactory: ITask<WinJSTPromise<T>>, delay?: number): WinJSPromise {
 		return super.trigger(() => this.throttler.queue(promiseFactory), delay);
 	}
 }
@@ -255,11 +255,11 @@ export class PeriodThrottledDelayer<T> extends ThrottledDelayer<T> {
 		this.periodThrottler = new Throttler();
 	}
 
-	public trigger(promiseFactory: ITask<TPromise<T>>, delay?: number): Promise {
+	public trigger(promiseFactory: ITask<WinJSTPromise<T>>, delay?: number): WinJSPromise {
 		return super.trigger(() => {
 			return this.periodThrottler.queue(() => {
-				return Promise.join([
-					Promise.timeout(this.minimumPeriod),
+				return WinJSPromise.join([
+					WinJSPromise.timeout(this.minimumPeriod),
 					promiseFactory()
 				]).then(r => r[1]);
 			});
@@ -269,18 +269,18 @@ export class PeriodThrottledDelayer<T> extends ThrottledDelayer<T> {
 
 export class PromiseSource<T> {
 
-	private _value: TPromise<T>;
+	private _value: WinJSTPromise<T>;
 	private _completeCallback: Function;
 	private _errorCallback: Function;
 
 	constructor() {
-		this._value = new TPromise<T>((c, e) => {
+		this._value = new WinJSTPromise<T>((c, e) => {
 			this._completeCallback = c;
 			this._errorCallback = e;
 		});
 	}
 
-	get value(): TPromise<T> {
+	get value(): WinJSTPromise<T> {
 		return this._value;
 	}
 
@@ -293,9 +293,9 @@ export class PromiseSource<T> {
 	}
 }
 
-export class ShallowCancelThenPromise<T> extends TPromise<T> {
+export class ShallowCancelThenPromise<T> extends WinJSTPromise<T> {
 
-	constructor(outer: TPromise<T>) {
+	constructor(outer: WinJSTPromise<T>) {
 
 		var completeCallback: ValueCallback,
 			errorCallback: ErrorCallback,
@@ -322,8 +322,8 @@ export class ShallowCancelThenPromise<T> extends TPromise<T> {
  * @param promise a promise
  * @param f a function that will be call in the success and error case.
  */
-export function always<T>(promise: TPromise<T>, f: Function): TPromise<T> {
-	return new TPromise<T>((c, e, p) => {
+export function always<T>(promise: WinJSTPromise<T>, f: Function): WinJSTPromise<T> {
+	return new WinJSTPromise<T>((c, e, p) => {
 		promise.done((result) => {
 			try {
 				f(result);
@@ -350,13 +350,13 @@ export function always<T>(promise: TPromise<T>, f: Function): TPromise<T> {
  * Runs the provided list of promise factories in sequential order. The returned
  * promise will complete to an array of results from each promise.
  */
-export function sequence<T>(promiseFactory: ITask<TPromise<T>>[]): TPromise<T[]> {
+export function sequence<T>(promiseFactory: ITask<WinJSTPromise<T>>[]): WinJSTPromise<T[]> {
 	var results: T[] = [];
 
 	// Reverse since we start with last element using pop()
 	promiseFactory = promiseFactory.reverse();
 
-	function next(): Promise {
+	function next(): WinJSPromise {
 		if (promiseFactory.length) {
 			return promiseFactory.pop()();
 		}
@@ -364,7 +364,7 @@ export function sequence<T>(promiseFactory: ITask<TPromise<T>>[]): TPromise<T[]>
 		return null;
 	}
 
-	function thenHandler(result: any): Promise {
+	function thenHandler(result: any): WinJSPromise {
 		if (result) {
 			results.push(result);
 		}
@@ -374,10 +374,10 @@ export function sequence<T>(promiseFactory: ITask<TPromise<T>>[]): TPromise<T[]>
 			return n.then(thenHandler);
 		}
 
-		return TPromise.as(results);
+		return WinJSTPromise.as(results);
 	}
 
-	return Promise.as(null).then(thenHandler);
+	return WinJSPromise.as(null).then(thenHandler);
 }
 
 export interface IFunction<A, R> {
@@ -402,7 +402,7 @@ export function once<A, R>(fn: IFunction<A, R>): IFunction<A, R> {
 }
 
 interface ILimitedTaskFactory {
-	factory: ITask<Promise>;
+	factory: ITask<WinJSPromise>;
 	c: ValueCallback;
 	e: ErrorCallback;
 	p: ProgressCallback;
@@ -423,9 +423,9 @@ export class Limiter<T> {
 		this.runningPromises = 0;
 	}
 
-	public queue(promiseFactory: ITask<Promise>): Promise;
-	public queue(promiseFactory: ITask<TPromise<T>>): TPromise<T> {
-		return new TPromise<T>((c, e, p) => {
+	public queue(promiseFactory: ITask<WinJSPromise>): WinJSPromise;
+	public queue(promiseFactory: ITask<WinJSTPromise<T>>): WinJSTPromise<T> {
+		return new WinJSTPromise<T>((c, e, p) => {
 			this.outstandingPromises.push({
 				factory: promiseFactory,
 				c: c,
@@ -516,14 +516,26 @@ export class RunOnceScheduler {
 	}
 }
 
-export function nfcall(fn: Function, ...args: any[]): Promise;
-export function nfcall<T>(fn: Function, ...args: any[]): TPromise<T>;
+export function nfcall(fn: Function, ...args: any[]): WinJSPromise;
+export function nfcall<T>(fn: Function, ...args: any[]): WinJSTPromise<T>;
 export function nfcall(fn: Function, ...args: any[]): any {
-	return new Promise((c, e) => fn(...args, (err, result) => err ? e(err) : c(result)));
+	return new WinJSPromise((c, e) => fn(...args, (err, result) => err ? e(err) : c(result)));
 }
 
-export function ninvoke(thisArg: any, fn: Function, ...args: any[]): Promise;
-export function ninvoke<T>(thisArg: any, fn: Function, ...args: any[]): TPromise<T>;
+export function ninvoke(thisArg: any, fn: Function, ...args: any[]): WinJSPromise;
+export function ninvoke<T>(thisArg: any, fn: Function, ...args: any[]): WinJSTPromise<T>;
 export function ninvoke(thisArg: any, fn: Function, ...args: any[]): any {
-	return new Promise((c, e) => fn.call(thisArg, ...args, (err, result) => err ? e(err) : c(result)));
+	return new WinJSPromise((c, e) => fn.call(thisArg, ...args, (err, result) => err ? e(err) : c(result)));
+}
+
+export namespace Convert {
+
+	export function toWinJS<T>(promise: Promise<T>) {
+		return new WinJSTPromise<T>((c, e) => promise.then(c, e));
+	}
+
+	export function toNative(promise: WinJSPromise);
+	export function toNative<T>(promise: WinJSTPromise<T>) {
+		return new Promise((c, e) => promise.done(c, e));
+	}
 }

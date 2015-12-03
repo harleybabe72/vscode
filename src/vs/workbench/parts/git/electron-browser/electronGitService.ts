@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Promise, TPromise } from 'vs/base/common/winjs.base';
-import { RawServiceState } from 'vs/workbench/parts/git/common/git';
+import { RawServiceState, IRawStatus } from 'vs/workbench/parts/git/common/git';
 import { NoOpGitService } from 'vs/workbench/parts/git/common/noopGitService';
 import { GitService } from 'vs/workbench/parts/git/browser/gitServices';
 import { ILifecycleService } from 'vs/platform/lifecycle/common/lifecycle';
@@ -21,6 +21,8 @@ import URI from 'vs/base/common/uri';
 import { spawn, exec } from 'child_process';
 import { join } from 'path';
 import * as remote from 'remote';
+import { Convert } from 'vs/base/common/async';
+import * as nodegit from 'nodegit';
 
 function findSpecificGit(gitPath: string): Promise {
 	return new Promise((c, e) => {
@@ -121,7 +123,7 @@ export function createNativeRawGitService(workspaceRoot: string, gitPath: string
 }
 
 class ElectronRawGitService extends DelayedRawGitService {
-	constructor(workspaceRoot: string, @IConfigurationService configurationService: IConfigurationService) {
+	constructor(protected workspaceRoot: string, @IConfigurationService configurationService: IConfigurationService) {
 		super(configurationService.loadConfiguration().then(conf => {
 			var enabled = conf.git ? conf.git.enabled : true;
 
@@ -134,6 +136,24 @@ class ElectronRawGitService extends DelayedRawGitService {
 
 			return createNativeRawGitService(workspaceRoot, gitPath, encoding);
 		}));
+	}
+
+	public status(): TPromise<IRawStatus> {
+		const result = nodegit.Repository
+			.open(this.workspaceRoot)
+			.then(repo => { console.log(repo); return nodegit.StatusList.create(repo, {}); })
+			.then(status => { console.log(status); return status; })
+			// .then(repo => Status.forEach(repo, f => console.log(f), null))
+			// .then(r => console.log(r))
+			.then(() => ({
+				repositoryRoot: '',
+				status: null,
+				HEAD: '',
+				heads: [],
+				tags: []
+			}));
+
+		return Convert.toWinJS(result);
 	}
 }
 
