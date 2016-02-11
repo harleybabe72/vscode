@@ -67,6 +67,7 @@ var copyrightFilter = [
 	'!resources/win32/bin/code.js',
 	'!**/*.sh',
 	'!**/*.txt',
+	'!**/bin/code',
 	'!src/vs/editor/standalone-languages/swift.ts',
 ];
 

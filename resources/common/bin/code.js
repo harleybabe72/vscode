@@ -5,7 +5,7 @@
 
 /* global process */
 
-var packageJson = require('../../../package.json');
+var packageJson = require('../package.json');
 var os = require('os');
 var spawn = require('child_process').spawn;
 
@@ -45,8 +45,8 @@ function parseArgs() {
 }
 
 function launchCode() {
-	delete process.env['ATOM_SHELL_INTERNAL_RUN_AS_NODE'];
-	spawn(process.env['VSCODE_PATH'], process.argv.slice(2), { detached: true, stdio: 'ignore' });
+	delete process.env['ELECTRON_RUN_AS_NODE'];
+	spawn(process.env['ELECTRON'], process.argv.slice(2), { detached: true, stdio: 'ignore' });
 }
 
 function main() {

@@ -215,12 +215,11 @@ function packageTask(platform, arch, opts) {
 			.pipe(util.cleanNodeModule('native-keymap', ['binding.gyp', 'build/**', 'src/**', 'deps/**'], true))
 			.pipe(util.cleanNodeModule('weak', ['binding.gyp', 'build/**', 'src/**'], true));
 
-		var resources = gulp.src('resources/*', { base: '.' });
-
+		var resources;
 		if (platform === 'win32') {
-			resources = es.merge(resources, gulp.src('resources/win32/code_file.ico', { base: '.' }));
+			resources = gulp.src('resources/win32/code_file.ico', { base: '.' });
 		} else if (platform === 'linux') {
-			resources = es.merge(resources, gulp.src('resources/linux/code.png', { base: '.' }));
+			resources = gulp.src('resources/linux/code.png', { base: '.' });
 		}
 
 		var extraExtensions = util.downloadExtensions(builtInExtensions)
@@ -236,13 +235,15 @@ function packageTask(platform, arch, opts) {
 			sources,
 			deps,
 			extraExtensions,
-			resources
+			resources || es.through()
 		).pipe(util.skipDirectories());
 
 		var result = all
 			.pipe(util.fixWin32DirectoryPermissions())
 			.pipe(electron(_.extend({}, config, { platform: platform, arch: arch })))
 			.pipe(filter(['**', '!LICENSE', '!LICENSES.chromium.html', '!version']));
+
+		result = es.merge(result, gulp.src('resources/common/**', { base: 'resources/common' }));
 
 		if (platform === 'win32') {
 			var shortcutFilter = filter('bin/*.cmd', { restore: true });
@@ -251,6 +252,8 @@ function packageTask(platform, arch, opts) {
 				.pipe(shortcutFilter)
 				.pipe(rename(function (f) { f.basename = product.win32ShortcutName; }))
 				.pipe(shortcutFilter.restore);
+		} else if (platform === 'darwin') {
+			result = es.merge(result, gulp.src('resources/darwin/bin/**', { base: 'resources/darwin' }));
 		}
 
 		return result.pipe(symdest(destination));
