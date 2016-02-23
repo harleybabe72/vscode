@@ -272,10 +272,9 @@ export class Configuration extends CommonEditorConfiguration {
 	private _elementSizeObserver: ElementSizeObserver;
 
 	constructor(options:any, referenceDomElement:HTMLElement = null, indentationGuesser:(tabSize:number)=>IGuessedIndentation = null) {
-		this._elementSizeObserver = new ElementSizeObserver(referenceDomElement, () => this._onReferenceDomElementSizeChanged());
-
 		super(options, indentationGuesser);
 
+		this._elementSizeObserver = new ElementSizeObserver(referenceDomElement, () => this._onReferenceDomElementSizeChanged());
 		this._register(CSSBasedConfiguration.INSTANCE.onDidChange(() => () => this._onCSSBasedConfigurationChanged()));
 
 		if (this._configWithDefaults.getEditorOptions().automaticLayout) {

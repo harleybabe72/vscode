@@ -143,8 +143,8 @@ export class KeybindingService extends AbstractKeybindingService implements IKey
 	private _currentChordStatusMessage: IDisposable;
 
 	constructor(domNode: HTMLElement) {
-		this._lastContextId = -1;
-		super((++this._lastContextId));
+		super(0);
+		this._lastContextId = 0;
 		this._domNode = domNode;
 		this._contexts = Object.create(null);
 		this._contexts[String(this._myContextId)] = new KeybindingContext(this._myContextId, null);
@@ -317,9 +317,9 @@ class ScopedKeybindingService extends AbstractKeybindingService {
 	private _domNode: IKeybindingScopeLocation;
 
 	constructor(parent: AbstractKeybindingService, domNode: IKeybindingScopeLocation) {
+		super(parent.createChildContext());
 		this._parent = parent;
 		this._domNode = domNode;
-		super(this._parent.createChildContext());
 		this._domNode.setAttribute(KEYBINDING_CONTEXT_ATTR, String(this._myContextId));
 	}
 

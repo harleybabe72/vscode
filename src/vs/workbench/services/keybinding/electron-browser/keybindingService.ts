@@ -121,8 +121,8 @@ export class WorkbenchKeybindingService extends KeybindingService {
 	private _eventService: IEventService;
 
 	constructor(contextService: IWorkspaceContextService, eventService: IEventService, telemetryService: ITelemetryService, domNode: HTMLElement) {
-		this.contextService = contextService;
 		super(domNode);
+		this.contextService = contextService;
 		this.eventService = eventService;
 		this.telemetryService = telemetryService;
 		this.toDispose = this.eventService.addListener(EventType.WORKBENCH_OPTIONS_CHANGED, (e) => this.onOptionsChanged(e));

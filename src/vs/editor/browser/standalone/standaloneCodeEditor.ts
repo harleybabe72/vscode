@@ -69,6 +69,13 @@ class StandaloneEditor extends CodeEditorWidget {
 		@IEditorService editorService: IEditorService,
 		@IMarkerService markerService: IMarkerService
 	) {
+		options = options || {};
+		if (typeof options.model === 'undefined') {
+			options.model = (<any>self).Monaco.Editor.createModel(options.value || '', options.mode || 'text/plain');
+		}
+
+		super(domElement, options, instantiationService, codeEditorService, keybindingService, telemetryService);
+
 		if (keybindingService instanceof AbstractKeybindingService) {
 			(<AbstractKeybindingService><any>keybindingService).setInstantiationService(instantiationService);
 		}
@@ -81,16 +88,7 @@ class StandaloneEditor extends CodeEditorWidget {
 		this._editorService = editorService;
 		this._markerService = markerService;
 		this._toDispose2 = toDispose;
-
-		options = options || {};
-		if (typeof options.model === 'undefined') {
-			options.model = (<any>self).Monaco.Editor.createModel(options.value || '', options.mode || 'text/plain');
-			this._ownsModel = true;
-		} else {
-			this._ownsModel = false;
-		}
-
-		super(domElement, options, instantiationService, codeEditorService, keybindingService, telemetryService);
+		this._ownsModel = typeof options.model === 'undefined';
 	}
 
 	public dispose(): void {
@@ -183,6 +181,8 @@ class StandaloneDiffEditor extends DiffEditorWidget {
 		@ITelemetryService telemetryService: ITelemetryService,
 		@IEditorWorkerService editorWorkerService: IEditorWorkerService
 	) {
+		super(domElement, options, editorWorkerService, instantiationService);
+
 		if (keybindingService instanceof AbstractKeybindingService) {
 			(<AbstractKeybindingService><any>keybindingService).setInstantiationService(instantiationService);
 		}
@@ -199,8 +199,6 @@ class StandaloneDiffEditor extends DiffEditorWidget {
 		this._toDispose2 = toDispose;
 
 		options = options || {};
-
-		super(domElement, options, editorWorkerService, instantiationService);
 
 		this._contextViewService.setContainer(this._containerDomElement);
 	}

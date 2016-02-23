@@ -47,9 +47,9 @@ export class CodeEditorWidget extends CommonCodeEditor implements editorBrowser.
 		@IKeybindingService keybindingService: IKeybindingService,
 		@ITelemetryService telemetryService: ITelemetryService
 	) {
-		this.domElement = domElement;
-
 		super(domElement, options, instantiationService, codeEditorService, keybindingService, telemetryService);
+
+		this.domElement = domElement;
 
 		// track focus of the domElement and all its anchestors
 		this.focusTracker = dom.trackFocus(this.domElement);

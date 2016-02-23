@@ -82,6 +82,22 @@ class MarkerSequence implements ISequence {
 
 }
 
+function getFirstNonBlankColumn(txt:string, defaultValue:number): number {
+	var r = strings.firstNonWhitespaceIndex(txt);
+	if (r === -1) {
+		return defaultValue;
+	}
+	return r + 1;
+}
+
+function getLastNonBlankColumn(txt:string, defaultValue:number): number {
+	var r = strings.lastNonWhitespaceIndex(txt);
+	if (r === -1) {
+		return defaultValue;
+	}
+	return r + 2;
+}
+
 class LineMarkerSequence extends MarkerSequence {
 
 	constructor(lines:string[], shouldIgnoreTrimWhitespace:boolean) {
@@ -95,8 +111,8 @@ class LineMarkerSequence extends MarkerSequence {
 			endColumn = lines[i].length + 1;
 
 			if (shouldIgnoreTrimWhitespace) {
-				startColumn = this._getFirstNonBlankColumn(lines[i], 1);
-				endColumn = this._getLastNonBlankColumn(lines[i], 1);
+				startColumn = getFirstNonBlankColumn(lines[i], 1);
+				endColumn = getLastNonBlankColumn(lines[i], 1);
 			}
 
 			startMarkers.push({
@@ -115,22 +131,6 @@ class LineMarkerSequence extends MarkerSequence {
 		}
 
 		super(buffer, startMarkers, endMarkers);
-	}
-
-	private _getFirstNonBlankColumn(txt:string, defaultValue:number): number {
-		var r = strings.firstNonWhitespaceIndex(txt);
-		if (r === -1) {
-			return defaultValue;
-		}
-		return r + 1;
-	}
-
-	private _getLastNonBlankColumn(txt:string, defaultValue:number): number {
-		var r = strings.lastNonWhitespaceIndex(txt);
-		if (r === -1) {
-			return defaultValue;
-		}
-		return r + 2;
 	}
 
 	public getCharSequence(startIndex:number, endIndex:number):MarkerSequence {

@@ -153,7 +153,7 @@ export class GoToDeclarationAction extends GoToTypeAction {
 		@IMessageService messageService: IMessageService,
 		@IEditorService editorService: IEditorService
 	) {
-		super(descriptor, editor, messageService, editorService, this.behaviour);
+		super(descriptor, editor, messageService, editorService, DEFAULT_BEHAVIOR);
 	}
 
 	public getGroupId(): string {
