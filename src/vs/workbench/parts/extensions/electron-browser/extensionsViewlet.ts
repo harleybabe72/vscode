@@ -18,9 +18,9 @@ import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { IRenderer, IDelegate } from 'vs/base/browser/ui/list/list';
 import { List } from 'vs/base/browser/ui/list/listWidget';
-import { IExtension, IExtensionsService } from '../common/extensions';
+import { IExtension, IExtensionsService, IGalleryService } from '../common/extensions';
 import { IHighlight } from 'vs/base/browser/ui/highlightedlabel/highlightedLabel';
-import { SplitView, View, CollapsibleView } from 'vs/base/browser/ui/splitview/splitview';
+import { SplitView, View, HeaderView } from 'vs/base/browser/ui/splitview/splitview';
 import { matchesContiguousSubString } from 'vs/base/common/filters';
 
 interface ITemplateData {
@@ -201,6 +201,11 @@ interface IState {
 	selectedEntry: IExtensionEntry;
 }
 
+interface IStateChangeEvent {
+	oldState: IState;
+	state: IState;
+}
+
 type StateUpdater = (state: any) => void;
 
 class ExtensionsView extends View {
@@ -210,7 +215,7 @@ class ExtensionsView extends View {
 
 	constructor(
 		private updateState: StateUpdater,
-		@IExtensionsService private extensionsService: IExtensionsService,
+		@IGalleryService private galleryService: IGalleryService,
 		@IInstantiationService private instantiationService: IInstantiationService
 	) {
 		super();
@@ -221,8 +226,9 @@ class ExtensionsView extends View {
 		this.list = new List(container, new Delegate(), [this.instantiationService.createInstance(Renderer)]);
 		this.disposables.push(this.list);
 
-		this.extensionsService.getInstalled().done(extensions => {
+		this.galleryService.query().done(extensions => {
 			const entries = extensions
+				.slice(0, 25)
 				.map(extension => ({ extension, highlights: getHighlights('', extension) }))
 				.filter(({ highlights }) => !!highlights)
 				.map(({ extension, highlights }) => ({
@@ -252,10 +258,16 @@ class ExtensionsView extends View {
 	}
 }
 
-class DetailsView extends CollapsibleView {
+class DetailsView extends HeaderView {
 
-	constructor(private onStateChange: Event<IState>) {
+	private disposables: IDisposable[];
+
+	constructor(
+		private initialState: IState,
+		private onStateChange: Event<IStateChangeEvent>
+	) {
 		super({ minimumSize: 24 * 10 });
+		this.disposables = [];
 	}
 
 	renderHeader(container: HTMLElement): void {
@@ -263,24 +275,42 @@ class DetailsView extends CollapsibleView {
 	}
 
 	renderBody(container: HTMLElement): void {
-		container.textContent = 'none';
-		this.onStateChange(e => e.selectedEntry && (container.textContent = e.selectedEntry.extension.displayName));
+		this.doRenderBody(this.initialState, container);
+		const listener = this.onStateChange(({ state }) => this.doRenderBody(state, container));
+		this.disposables.push(listener);
+	}
+
+	private doRenderBody(state: IState, container: HTMLElement): void {
+		const entry = state.selectedEntry;
+
+		if (!entry) {
+			container.innerHTML = '';
+			return;
+		}
+
+		container.textContent = entry.extension.displayName;
 	}
 
 	protected layoutBody(size: number): void {
 		// to optionally implement
+	}
+
+	dispose(): void {
+		this.disposables = disposeAll(this.disposables);
+		super.dispose();
 	}
 }
 
 export class ExtensionsViewlet extends Viewlet {
 
 	private state: IState;
-	private onStateChangeEmitter: Emitter<IState>;
+	private onStateChangeEmitter: Emitter<IStateChangeEvent>;
+	private get onStateChange(): Event<IStateChangeEvent> { return this.onStateChangeEmitter.event; }
 	private splitview: SplitView;
+	private detailsView: DetailsView;
 	private disposables: IDisposable[];
 
 	constructor(
-		@IExtensionsService private extensionsService: IExtensionsService,
 		@IInstantiationService private instantiationService: IInstantiationService,
 		@ITelemetryService telemetryService: ITelemetryService
 	) {
@@ -299,8 +329,23 @@ export class ExtensionsViewlet extends Viewlet {
 		const extensionsView = this.instantiationService.createInstance(ExtensionsView, state => this.updateState(state));
 		this.splitview.addView(extensionsView, 2);
 
-		const detailsView = new DetailsView(this.onStateChangeEmitter.event);
-		this.splitview.addView(detailsView, 1);
+		// this.splitview.addView(detailsView, 1);
+		// this.
+
+		const onStateChangeListener = this.onStateChange(({ oldState, state }) => {
+			if (state.selectedEntry && !oldState.selectedEntry) {
+				this.detailsView = new DetailsView(this.state, this.onStateChangeEmitter.event);
+				this.disposables.push(this.detailsView);
+				this.splitview.addView(this.detailsView, 10);
+			} else if (this.detailsView && !state.selectedEntry && oldState.selectedEntry) {
+				this.splitview.removeView(this.detailsView);
+				this.detailsView.dispose();
+				this.disposables.splice(this.disposables.indexOf(this.detailsView), 1);
+				this.detailsView = null;
+			}
+		});
+
+		this.disposables.push(onStateChangeListener);
 
 		return TPromise.as(null);
 	}
@@ -310,8 +355,9 @@ export class ExtensionsViewlet extends Viewlet {
 	}
 
 	private updateState(obj: any): void {
-		this.state = assign(this.state, obj);
-		this.onStateChangeEmitter.fire(this.state);
+		const oldState = this.state;
+		const state = this.state = assign({}, this.state, obj);
+		this.onStateChangeEmitter.fire({ oldState, state });
 	}
 
 	dispose(): void {
