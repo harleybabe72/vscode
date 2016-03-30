@@ -62,7 +62,7 @@ export class View extends ee.EventEmitter {
 	protected _fixedSize: number;
 	protected _minimumSize: number;
 
-	constructor(opts: IViewOptions) {
+	constructor(opts: IViewOptions = {}) {
 		super();
 
 		this.size = 0;

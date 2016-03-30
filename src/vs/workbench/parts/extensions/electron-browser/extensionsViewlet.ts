@@ -4,7 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import 'vs/css!./media/extensionsViewlet';
+import nls = require('vs/nls');
 import { TPromise } from 'vs/base/common/winjs.base';
+import { assign } from 'vs/base/common/objects';
+import Event, { Emitter } from 'vs/base/common/event';
 import { IDisposable, disposeAll } from 'vs/base/common/lifecycle';
 import { Builder } from 'vs/base/browser/builder';
 import { emmet as $, append } from 'vs/base/browser/dom';
@@ -17,6 +20,7 @@ import { IRenderer, IDelegate } from 'vs/base/browser/ui/list/list';
 import { List } from 'vs/base/browser/ui/list/listWidget';
 import { IExtension, IExtensionsService } from '../common/extensions';
 import { IHighlight } from 'vs/base/browser/ui/highlightedlabel/highlightedLabel';
+import { SplitView, View, CollapsibleView } from 'vs/base/browser/ui/splitview/splitview';
 import { matchesContiguousSubString } from 'vs/base/common/filters';
 
 interface ITemplateData {
@@ -193,26 +197,31 @@ class Renderer implements IRenderer<IExtensionEntry, ITemplateData> {
 	}
 }
 
-export class ExtensionsViewlet extends Viewlet {
+interface IState {
+	selectedEntry: IExtensionEntry;
+}
+
+type StateUpdater = (state: any) => void;
+
+class ExtensionsView extends View {
 
 	private list: List<IExtensionEntry>;
 	private disposables: IDisposable[];
 
 	constructor(
+		private updateState: StateUpdater,
 		@IExtensionsService private extensionsService: IExtensionsService,
-		@IInstantiationService private instantiationService: IInstantiationService,
-		@ITelemetryService telemetryService: ITelemetryService
+		@IInstantiationService private instantiationService: IInstantiationService
 	) {
-		super(ViewletId, telemetryService);
+		super();
 		this.disposables = [];
 	}
 
-	create(parent: Builder): TPromise<void> {
-		const domNode = append(parent.getHTMLElement(), $('.extensions-viewlet'));
-		this.list = new List(domNode, new Delegate(), [this.instantiationService.createInstance(Renderer)]);
+	render(container: HTMLElement): void {
+		this.list = new List(container, new Delegate(), [this.instantiationService.createInstance(Renderer)]);
 		this.disposables.push(this.list);
 
-		return this.extensionsService.getInstalled().then(extensions => {
+		this.extensionsService.getInstalled().done(extensions => {
 			const entries = extensions
 				.map(extension => ({ extension, highlights: getHighlights('', extension) }))
 				.filter(({ highlights }) => !!highlights)
@@ -225,14 +234,88 @@ export class ExtensionsViewlet extends Viewlet {
 
 			this.list.splice(0, this.list.length, ...entries);
 		});
+
+		this.list.onSelectionChange(event => this.updateState({ selectedEntry: event.elements[0] }));
 	}
 
-	layout(dimension: Dimension): void {
-		this.list.layout(dimension.height);
+	focus(): void {
+		// TODO
+	}
+
+	layout(height: number): void {
+		this.list.layout(height);
 	}
 
 	dispose(): void {
-		super.dispose();
 		this.disposables = disposeAll(this.disposables);
+		super.dispose();
+	}
+}
+
+class DetailsView extends CollapsibleView {
+
+	constructor(private onStateChange: Event<IState>) {
+		super({ minimumSize: 24 * 10 });
+	}
+
+	renderHeader(container: HTMLElement): void {
+		container.textContent = nls.localize('extensionDetails', 'Extension Details');
+	}
+
+	renderBody(container: HTMLElement): void {
+		container.textContent = 'none';
+		this.onStateChange(e => e.selectedEntry && (container.textContent = e.selectedEntry.extension.displayName));
+	}
+
+	protected layoutBody(size: number): void {
+		// to optionally implement
+	}
+}
+
+export class ExtensionsViewlet extends Viewlet {
+
+	private state: IState;
+	private onStateChangeEmitter: Emitter<IState>;
+	private splitview: SplitView;
+	private disposables: IDisposable[];
+
+	constructor(
+		@IExtensionsService private extensionsService: IExtensionsService,
+		@IInstantiationService private instantiationService: IInstantiationService,
+		@ITelemetryService telemetryService: ITelemetryService
+	) {
+		super(ViewletId, telemetryService);
+		this.state = { selectedEntry: null };
+		this.onStateChangeEmitter = new Emitter();
+		this.disposables = [this.onStateChangeEmitter];
+	}
+
+	create(parent: Builder): TPromise<void> {
+		const domNode = append(parent.getHTMLElement(), $('.extensions-viewlet'));
+
+		this.splitview = new SplitView(domNode);
+		this.disposables.push(this.splitview);
+
+		const extensionsView = this.instantiationService.createInstance(ExtensionsView, state => this.updateState(state));
+		this.splitview.addView(extensionsView, 2);
+
+		const detailsView = new DetailsView(this.onStateChangeEmitter.event);
+		this.splitview.addView(detailsView, 1);
+
+		return TPromise.as(null);
+	}
+
+	layout(dimension: Dimension): void {
+		this.splitview.layout(dimension.height);
+	}
+
+	private updateState(obj: any): void {
+		this.state = assign(this.state, obj);
+		this.onStateChangeEmitter.fire(this.state);
+	}
+
+	dispose(): void {
+		this.disposables = disposeAll(this.disposables);
+		super.dispose();
 	}
 }
