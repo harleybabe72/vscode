@@ -411,7 +411,7 @@ export class SplitView implements
 	private initialWeights: number[];
 	private sashOrientation: sash.Orientation;
 	private sashes: sash.Sash[];
-	private sashesListeners: IDisposable[];
+	private sashesListeners: IDisposable[][];
 	private measureContainerSize: () => number;
 	private layoutViewElement: (viewElement: HTMLElement, size: number) => void;
 	private eventWrapper: (event: sash.ISashEvent) => ISashEvent;
@@ -498,8 +498,10 @@ export class SplitView implements
 		if (this.views.length > 2) {
 			let s = new sash.Sash(this.el, this, { orientation: this.sashOrientation });
 			this.sashes.splice(index - 1, 0, s);
-			this.sashesListeners.push(s.addListener2('start', e => this.onSashStart(s, this.eventWrapper(e))));
-			this.sashesListeners.push(s.addListener2('change', e => this.onSashChange(s, this.eventWrapper(e))));
+			this.sashesListeners.splice(index - 1, 0, [
+				s.addListener2('start', e => this.onSashStart(s, this.eventWrapper(e))),
+				s.addListener2('change', e => this.onSashChange(s, this.eventWrapper(e)))
+			]);
 		}
 
 		this.viewChangeListeners.splice(index, 0, view.addListener2('change', size => this.onViewChange(view, size)));
@@ -527,6 +529,9 @@ export class SplitView implements
 		let sashIndex = Math.max(index - 1, 0);
 		this.sashes[sashIndex].dispose();
 		this.sashes.splice(sashIndex, 1);
+
+		disposeAll(this.sashesListeners[sashIndex]);
+		this.sashesListeners.splice(sashIndex, 1);
 
 		this.viewChangeListeners[index].dispose();
 		this.viewChangeListeners.splice(index, 1);
@@ -811,7 +816,8 @@ export class SplitView implements
 		this.viewElements = [];
 		this.views = disposeAll(this.views);
 		this.sashes = disposeAll(this.sashes);
-		this.sashesListeners = disposeAll(this.sashesListeners);
+		this.sashesListeners.forEach(disposeAll);
+		this.sashesListeners = null;
 		this.measureContainerSize = null;
 		this.layoutViewElement = null;
 		this.eventWrapper = null;
