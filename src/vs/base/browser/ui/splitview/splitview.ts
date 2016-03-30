@@ -102,7 +102,7 @@ export class View extends ee.EventEmitter {
 	}
 }
 
-export interface IHeaderViewOptions {
+export interface IHeaderViewOptions extends IViewOptions {
 	headerSize?: number;
 }
 
