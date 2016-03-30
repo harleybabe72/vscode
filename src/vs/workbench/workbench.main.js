@@ -17,11 +17,11 @@ define([
 	'vs/base/common/errors',
 
 	// Editor
+	'vs/editor/contrib/selectionClipboard/electron-browser/selectionClipboard',
 	'vs/editor/browser/editor.all',
 
 	// Languages
 	'vs/languages/languages.main',
-	'vs/languages/typescript.workbench/common/contribution',
 
 	// Workbench
 	'vs/workbench/browser/actions/toggleSidebarVisibility',
@@ -31,6 +31,7 @@ define([
 	'vs/workbench/browser/actions/triggerNavigation',
 	'vs/workbench/browser/actions/showPerformanceBox',
 	'vs/workbench/browser/actions/openSettings',
+	'vs/workbench/browser/actions/configureLocale',
 
 	'vs/workbench/parts/quickopen/browser/quickopen.contribution',
 
@@ -80,6 +81,8 @@ define([
 	'vs/workbench/parts/feedback/electron-browser/feedback.contribution',
 
 	'vs/workbench/parts/gettingStarted/electron-browser/electronGettingStarted.contribution',
+
+	'vs/workbench/parts/update/electron-browser/update.contribution',
 
 	'vs/workbench/electron-browser/darwin/cli.contribution',
 

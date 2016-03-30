@@ -7,9 +7,6 @@
 
 import 'vs/css!./media/shell';
 
-import 'vs/css!vs/editor/css/vs-theme';
-import 'vs/css!vs/editor/css/vs-dark-theme';
-import 'vs/css!vs/editor/css/hc-black-theme';
 import 'vs/css!vs/workbench/browser/media/vs-theme';
 import 'vs/css!vs/workbench/browser/media/vs-dark-theme';
 import 'vs/css!vs/workbench/browser/media/hc-black-theme';
@@ -43,15 +40,17 @@ import {SearchService} from 'vs/workbench/services/search/node/searchService';
 import {LifecycleService} from 'vs/workbench/services/lifecycle/electron-browser/lifecycleService';
 import {WorkbenchKeybindingService} from 'vs/workbench/services/keybinding/electron-browser/keybindingService';
 import {MainThreadService} from 'vs/workbench/services/thread/electron-browser/threadService';
-import {MarkerService} from 'vs/platform/markers/common/markerService';
+import {MainProcessMarkerService} from 'vs/platform/markers/common/markerService';
 import {IActionsService} from 'vs/platform/actions/common/actions';
 import ActionsService from 'vs/platform/actions/common/actionsService';
 import {IModelService} from 'vs/editor/common/services/modelService';
 import {ModelServiceImpl} from 'vs/editor/common/services/modelServiceImpl';
 import {CodeEditorServiceImpl} from 'vs/editor/browser/services/codeEditorServiceImpl';
 import {ICodeEditorService} from 'vs/editor/common/services/codeEditorService';
+import {EditorWorkerServiceImpl} from 'vs/editor/common/services/editorWorkerServiceImpl';
+import {IEditorWorkerService} from 'vs/editor/common/services/editorWorkerService';
 import {MainProcessVSCodeAPIHelper} from 'vs/workbench/api/node/extHost.api.impl';
-import {MainProcessPluginService} from 'vs/platform/plugins/common/nativePluginService';
+import {MainProcessExtensionService} from 'vs/platform/extensions/common/nativeExtensionService';
 import {MainThreadDocuments} from 'vs/workbench/api/node/extHostDocuments';
 import {MainProcessTextMateSyntax} from 'vs/editor/node/textMate/TMSyntax';
 import {MainProcessTextMateSnippet} from 'vs/editor/node/textMate/TMSnippets';
@@ -72,12 +71,11 @@ import {MainThreadConfiguration} from 'vs/workbench/api/node/extHostConfiguratio
 import {MainThreadLanguageFeatures} from 'vs/workbench/api/node/extHostLanguageFeatures';
 import {EventService} from 'vs/platform/event/common/eventService';
 import {IOptions} from 'vs/workbench/common/options';
-import themes = require('vs/platform/theme/common/themes');
 import {WorkspaceContextService} from 'vs/workbench/services/workspace/common/contextService';
 import {IStorageService, StorageScope, StorageEvent, StorageEventType} from 'vs/platform/storage/common/storage';
 import {MainThreadStorage} from 'vs/platform/storage/common/remotable.storage';
 import {IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
-import {create as createInstantiationService } from 'vs/platform/instantiation/common/instantiationService';
+import {createInstantiationService as createInstantiationService } from 'vs/platform/instantiation/common/instantiationService';
 import {IContextViewService, IContextMenuService} from 'vs/platform/contextview/browser/contextView';
 import {IEventService} from 'vs/platform/event/common/event';
 import {IFileService} from 'vs/platform/files/common/files';
@@ -89,7 +87,7 @@ import {IRequestService} from 'vs/platform/request/common/request';
 import {ISearchService} from 'vs/platform/search/common/search';
 import {IThreadService} from 'vs/platform/thread/common/thread';
 import {IWorkspaceContextService, IConfiguration, IWorkspace} from 'vs/platform/workspace/common/workspace';
-import {IPluginService} from 'vs/platform/plugins/common/plugins';
+import {IExtensionService} from 'vs/platform/extensions/common/extensions';
 import {MainThreadModeServiceImpl} from 'vs/editor/common/services/modeServiceImpl';
 import {IModeService} from 'vs/editor/common/services/modeService';
 import {IUntitledEditorService, UntitledEditorService} from 'vs/workbench/services/untitled/common/untitledEditorService';
@@ -174,7 +172,7 @@ export class WorkbenchShell {
 		this.workbench = new Workbench(workbenchContainer.getHTMLElement(), this.workspace, this.configuration, this.options, instantiationService);
 		this.workbench.startup({
 			onServicesCreated: () => {
-				this.initPluginSystem();
+				this.initExtensionSystem();
 			},
 			onWorkbenchStarted: () => {
 				this.onWorkbenchStarted();
@@ -229,22 +227,22 @@ export class WorkbenchShell {
 
 		this.windowService = new WindowService();
 
-		let disableWorkspaceStorage = this.configuration.env.pluginTestsPath || (!this.workspace && !this.configuration.env.pluginDevelopmentPath); // without workspace or in any plugin test, we use inMemory storage unless we develop a plugin where we want to preserve state
+		let disableWorkspaceStorage = this.configuration.env.extensionTestsPath || (!this.workspace && !this.configuration.env.extensionDevelopmentPath); // without workspace or in any extension test, we use inMemory storage unless we develop an extension where we want to preserve state
 		this.storageService = new Storage(this.contextService, window.localStorage, disableWorkspaceStorage ? inMemoryLocalStorageInstance : window.localStorage);
-
-		// no telemetry in a window for plugin development!
-		let enableTelemetry = this.configuration.env.isBuilt && !this.configuration.env.pluginDevelopmentPath ? !!this.configuration.env.enableTelemetry : false;
-		this.telemetryService = new ElectronTelemetryService(this.storageService, { enableTelemetry: enableTelemetry, version: this.configuration.env.version, commitHash: this.configuration.env.commitHash });
-
-		this.keybindingService = new WorkbenchKeybindingService(this.contextService, eventService, this.telemetryService, <any>window);
-
-		this.messageService = new MessageService(this.contextService, this.windowService, this.telemetryService, this.keybindingService);
-		this.keybindingService.setMessageService(this.messageService);
 
 		let configService = new ConfigurationService(
 			this.contextService,
 			eventService
 		);
+
+		// no telemetry in a window for extension development!
+		let enableTelemetry = this.configuration.env.isBuilt && !this.configuration.env.extensionDevelopmentPath ? !!this.configuration.env.enableTelemetry : false;
+		this.telemetryService = new ElectronTelemetryService(configService, this.storageService, { enableTelemetry: enableTelemetry, version: this.configuration.env.version, commitHash: this.configuration.env.commitHash });
+
+		this.keybindingService = new WorkbenchKeybindingService(configService, this.contextService, eventService, this.telemetryService, <any>window);
+
+		this.messageService = new MessageService(this.contextService, this.windowService, this.telemetryService, this.keybindingService);
+		this.keybindingService.setMessageService(this.messageService);
 
 		let fileService = new FileService(
 			configService,
@@ -267,16 +265,17 @@ export class WorkbenchShell {
 		);
 		lifecycleService.onShutdown(() => requestService.dispose());
 
-		let markerService = new MarkerService(this.threadService);
+		let markerService = new MainProcessMarkerService(this.threadService);
 
-		let pluginService = new MainProcessPluginService(this.contextService, this.threadService, this.messageService, this.telemetryService);
-		this.keybindingService.setPluginService(pluginService);
+		let extensionService = new MainProcessExtensionService(this.contextService, this.threadService, this.messageService, this.telemetryService);
+		this.keybindingService.setExtensionService(extensionService);
 
-		let modelService = new ModelServiceImpl(this.threadService, markerService);
-		let modeService = new MainThreadModeServiceImpl(this.threadService, pluginService, modelService);
+		let modeService = new MainThreadModeServiceImpl(this.threadService, extensionService, configService);
+		let modelService = new ModelServiceImpl(this.threadService, markerService, modeService, configService, this.messageService);
+		let editorWorkerService = new EditorWorkerServiceImpl(modelService);
 
 		let untitledEditorService = new UntitledEditorService();
-		this.themeService = new ThemeService(pluginService);
+		this.themeService = new ThemeService(extensionService);
 
 		let result = createInstantiationService();
 		result.addSingleton(ITelemetryService, this.telemetryService);
@@ -289,7 +288,7 @@ export class WorkbenchShell {
 		result.addSingleton(IStorageService, this.storageService);
 		result.addSingleton(ILifecycleService, lifecycleService);
 		result.addSingleton(IThreadService, this.threadService);
-		result.addSingleton(IPluginService, pluginService);
+		result.addSingleton(IExtensionService, extensionService);
 		result.addSingleton(IModeService, modeService);
 		result.addSingleton(IFileService, fileService);
 		result.addSingleton(IUntitledEditorService, untitledEditorService);
@@ -300,15 +299,16 @@ export class WorkbenchShell {
 		result.addSingleton(IMarkerService, markerService);
 		result.addSingleton(IModelService, modelService);
 		result.addSingleton(ICodeEditorService, new CodeEditorServiceImpl());
+		result.addSingleton(IEditorWorkerService, editorWorkerService);
 		result.addSingleton(IThemeService, this.themeService);
-		result.addSingleton(IActionsService, new ActionsService(pluginService, this.keybindingService));
+		result.addSingleton(IActionsService, new ActionsService(extensionService, this.keybindingService));
 
 
 		return result;
 	}
 
 	// TODO@Alex, TODO@Joh move this out of here?
-	private initPluginSystem(): void {
+	private initExtensionSystem(): void {
 		this.threadService.getRemotable(MainProcessVSCodeAPIHelper);
 		this.threadService.getRemotable(MainThreadDocuments);
 		this.threadService.getRemotable(RemoteTelemetryServiceHelper);
@@ -376,7 +376,7 @@ export class WorkbenchShell {
 		if (!themeId) {
 			return;
 		}
-		let applyTheme = () => {
+		let applyTheme = (themeId: string) => {
 			if (this.currentTheme) {
 				$(this.container).removeClass(this.currentTheme);
 			}
@@ -388,18 +388,17 @@ export class WorkbenchShell {
 			}
 		};
 
-		if (!themes.getSyntaxThemeId(themeId)) {
-			applyTheme();
-		} else {
-			this.themeService.loadTheme(themeId).then(theme => {
-				if (theme) {
-					this.themeService.applyThemeCSS(themeId);
-					applyTheme();
-				}
-			}, error => {
-				errors.onUnexpectedError(error);
-			});
-		}
+		this.themeService.loadTheme(themeId).then(theme => {
+			let newThemeId = theme ? theme.id : DEFAULT_THEME_ID;
+
+			this.themeService.applyThemeCSS(newThemeId);
+			applyTheme(newThemeId);
+			if (newThemeId !== themeId) {
+				this.storageService.store(Preferences.THEME, newThemeId, StorageScope.GLOBAL);
+			}
+		}, error => {
+			errors.onUnexpectedError(error);
+		});
 	}
 
 	private registerListeners(): void {

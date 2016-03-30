@@ -7,7 +7,7 @@ import nls = require('vs/nls');
 import 'vs/css!../browser/media/breakpointWidget';
 import async = require('vs/base/common/async');
 import errors = require('vs/base/common/errors');
-import { CommonKeybindings, KeyCode } from 'vs/base/common/keyCodes';
+import { CommonKeybindings, KeyCode, KeyMod } from 'vs/base/common/keyCodes';
 import platform = require('vs/base/common/platform');
 import lifecycle = require('vs/base/common/lifecycle');
 import dom = require('vs/base/browser/dom');
@@ -19,6 +19,7 @@ import { ZoneWidget } from 'vs/editor/contrib/zoneWidget/browser/zoneWidget';
 import { IContextViewService } from 'vs/platform/contextview/browser/contextView';
 import { IKeybindingService, IKeybindingContextKey } from 'vs/platform/keybinding/common/keybindingService';
 import debug = require('vs/workbench/parts/debug/common/debug');
+import {IKeyboardEvent} from 'vs/base/browser/keyboardEvent';
 
 const $ = dom.emmet;
 const CONTEXT_BREAKPOINT_WIDGET_VISIBLE = 'breakpointWidgetVisible';
@@ -88,7 +89,7 @@ export class BreakpointWidget extends ZoneWidget {
 			}
 		});
 
-		this.toDispose.push(dom.addStandardDisposableListener(this.inputBox.inputElement, 'keydown', (e: dom.IKeyboardEvent) => {
+		this.toDispose.push(dom.addStandardDisposableListener(this.inputBox.inputElement, 'keydown', (e: IKeyboardEvent) => {
 			const isEscape = e.equals(CommonKeybindings.ESCAPE);
 			const isEnter = e.equals(CommonKeybindings.ENTER);
 			if (isEscape || isEnter) {
@@ -107,7 +108,7 @@ export class BreakpointWidget extends ZoneWidget {
 	}
 }
 
-CommonEditorRegistry.registerEditorCommand(CLOSE_BREAKPOINT_WIDGET_COMMAND_ID, CommonEditorRegistry.commandWeight(8), { primary: KeyCode.Escape,  }, false, CONTEXT_BREAKPOINT_WIDGET_VISIBLE, (ctx, editor, args) => {
+CommonEditorRegistry.registerEditorCommand(CLOSE_BREAKPOINT_WIDGET_COMMAND_ID, CommonEditorRegistry.commandWeight(8), { primary: KeyCode.Escape, secondary: [KeyMod.Shift | KeyCode.Escape]  }, false, CONTEXT_BREAKPOINT_WIDGET_VISIBLE, (ctx, editor, args) => {
 	if (BreakpointWidget.INSTANCE) {
 		BreakpointWidget.INSTANCE.dispose();
 	}

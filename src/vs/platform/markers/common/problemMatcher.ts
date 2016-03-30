@@ -1000,7 +1000,7 @@ export class ProblemMatcherParser extends Parser {
 	}
 }
 
-// let problemMatchersExtPoint = PluginsRegistry.registerExtensionPoint<Config.NamedProblemMatcher | Config.NamedProblemMatcher[]>('problemMatchers', {
+// let problemMatchersExtPoint = ExtensionsRegistry.registerExtensionPoint<Config.NamedProblemMatcher | Config.NamedProblemMatcher[]>('problemMatchers', {
 // TODO@Dirk: provide here JSON schema for extension point
 // });
 
@@ -1125,7 +1125,6 @@ registry.add('eslint-compact', {
 registry.add('eslint-stylish', {
 	owner: 'javascript',
 	applyTo: ApplyToKind.allDocuments,
-	fileLocation: FileLocationKind.Relative,
-	filePrefix: '${cwd}',
+	fileLocation: FileLocationKind.Absolute,
 	pattern: defaultPattern('eslint-stylish')
 });

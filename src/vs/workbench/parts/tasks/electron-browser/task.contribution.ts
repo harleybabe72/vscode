@@ -20,7 +20,6 @@ import * as Dom from 'vs/base/browser/dom';
 import { IDisposable, disposeAll } from 'vs/base/common/lifecycle';
 import { EventEmitter, ListenerUnbind } from 'vs/base/common/eventEmitter';
 import * as Builder from 'vs/base/browser/builder';
-import URI from 'vs/base/common/uri';
 import * as Types from 'vs/base/common/types';
 import { KeyMod, KeyCode } from 'vs/base/common/keyCodes';
 import { match } from 'vs/base/common/glob';
@@ -32,13 +31,14 @@ import { ILifecycleService } from 'vs/platform/lifecycle/common/lifecycle';
 import { SyncActionDescriptor } from 'vs/platform/actions/common/actions';
 import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
 import { IEventService } from 'vs/platform/event/common/event';
+import { IEditor } from 'vs/platform/editor/common/editor';
 import { IMessageService } from 'vs/platform/message/common/message';
 import { IMarkerService, MarkerStatistics } from 'vs/platform/markers/common/markers';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IConfigurationService, ConfigurationServiceEventTypes } from 'vs/platform/configuration/common/configuration';
 import { IFileService, FileChangesEvent, FileChangeType, EventType as FileEventType } from 'vs/platform/files/common/files';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
-import { IPluginService } from 'vs/platform/plugins/common/plugins';
+import { IExtensionService } from 'vs/platform/extensions/common/extensions';
 
 import { IModeService } from 'vs/editor/common/services/modeService';
 import { IModelService } from 'vs/editor/common/services/modelService';
@@ -48,9 +48,9 @@ import { IJSONSchema } from 'vs/base/common/jsonSchema';
 
 import { IWorkbenchContribution, IWorkbenchContributionsRegistry, Extensions as WorkbenchExtensions } from 'vs/workbench/common/contributions';
 
-import workbenchActionRegistry = require('vs/workbench/common/actionRegistry');
-import statusbar = require('vs/workbench/browser/parts/statusbar/statusbar');
-import QuickOpen = require('vs/workbench/browser/quickopen');
+import { IWorkbenchActionRegistry, Extensions as WorkbenchActionExtensions } from 'vs/workbench/common/actionRegistry';
+import { IStatusbarItem, IStatusbarRegistry, Extensions as StatusbarExtensions, StatusbarItemDescriptor, StatusbarAlignment }  from 'vs/workbench/browser/parts/statusbar/statusbar';
+import { IQuickOpenRegistry, Extensions as QuickOpenExtensions, QuickOpenHandlerDescriptor } from 'vs/workbench/browser/quickopen';
 
 import { IQuickOpenService } from 'vs/workbench/services/quickopen/common/quickOpenService';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
@@ -60,8 +60,9 @@ import { SystemVariables } from 'vs/workbench/parts/lib/node/systemVariables';
 import { ITextFileService, EventType } from 'vs/workbench/parts/files/common/files';
 import { IOutputService, IOutputChannelRegistry, Extensions as OutputExt } from 'vs/workbench/parts/output/common/output';
 
-import { ITaskSystem, ITaskSummary, ITaskRunResult, TaskError, TaskConfiguration, TaskDescription, TaskSystemEvents } from 'vs/workbench/parts/tasks/common/taskSystem';
+import { ITaskSystem, ITaskSummary, ITaskRunResult, TaskError, TaskErrors, TaskConfiguration, TaskDescription, TaskSystemEvents } from 'vs/workbench/parts/tasks/common/taskSystem';
 import { ITaskService, TaskServiceEvents } from 'vs/workbench/parts/tasks/common/taskService';
+import { templates as taskTemplates } from 'vs/workbench/parts/tasks/common/taskTemplates';
 
 import { LanguageServiceTaskSystem, LanguageServiceTaskConfiguration }  from 'vs/workbench/parts/tasks/common/languageServiceTaskSystem';
 import * as FileConfig  from 'vs/workbench/parts/tasks/node/processRunnerConfiguration';
@@ -148,11 +149,12 @@ class ConfigureTaskRunnerAction extends Action {
 	private contextService: IWorkspaceContextService;
 	private outputService: IOutputService;
 	private messageService: IMessageService;
+	private quickOpenService: IQuickOpenService;
 
 	constructor(id: string, label: string, @IConfigurationService configurationService: IConfigurationService,
 		@IWorkbenchEditorService editorService: IWorkbenchEditorService, @IFileService fileService: IFileService,
 		@IWorkspaceContextService contextService: IWorkspaceContextService, @IOutputService outputService: IOutputService,
-		@IMessageService messageService: IMessageService) {
+		@IMessageService messageService: IMessageService, @IQuickOpenService quickOpenService: IQuickOpenService) {
 
 		super(id, label);
 		this.configurationService = configurationService;
@@ -161,57 +163,69 @@ class ConfigureTaskRunnerAction extends Action {
 		this.contextService = contextService;
 		this.outputService = outputService;
 		this.messageService = messageService;
+		this.quickOpenService = quickOpenService;
 	}
 
-	public run(event?:any): Promise {
+	public run(event?:any): TPromise<IEditor> {
+		if (!this.contextService.getWorkspace()) {
+			this.messageService.show(Severity.Info, nls.localize('ConfigureTaskRunnerAction.noWorkspace', 'Tasks are only available on a workspace folder.'));
+			return TPromise.as(undefined);
+		}
 		let sideBySide = !!(event && (event.ctrlKey || event.metaKey));
-		let autoDetectFailed = false;
 		return this.fileService.resolveFile(this.contextService.toResource('.vscode/tasks.json')).then((success) => {
 			return success;
 		}, (err:any) => {
-			let detector = new ProcessRunnerDetector(this.fileService, this.contextService, new SystemVariables(this.editorService, this.contextService));
-			return detector.detect(false).then((value) => {
-				let config = value.config;
-				if (value.stderr && value.stderr.length > 0) {
-					value.stderr.forEach((line) => {
-						this.outputService.append(TaskService.OutputChannel, line + '\n');
-					});
-					autoDetectFailed = true;
-					this.messageService.show(Severity.Error, nls.localize('ConfigureTaskRunnerAction.autoDetect', 'Auto detecting the task system failed. Consult the task output for details'));
+			;
+			return this.quickOpenService.pick(taskTemplates, { placeHolder: nls.localize('ConfigureTaskRunnerAction.quickPick.template', 'Select a Task Runner')}).then(selection => {
+				if (!selection) {
+					return undefined;
 				}
 				let contentPromise: TPromise<string>;
-				if (config) {
-					contentPromise = TPromise.as<string>(JSON.stringify(config, null, 4));
-				} else {
-					// TODO@Dirk: Converting double time here to get a wrong uri that is compatible with the rest of the system
-					let configSampleUri = URI.parse(require.toUrl('vs/workbench/parts/tasks/common/taskSampleConfig.json'));
-					contentPromise = this.fileService.resolveContent(configSampleUri, { encoding: 'utf8' /* make sure to keep sample file encoding as we stored it! */}).then(content => {
-						return content.value;
-					}, (err:any) => {
-						let config: FileConfig.ExternalTaskRunnerConfiguration = {
-							version: '0.1.0',
-							command: 'msbuild.exe',
-							args: [ '/property:GenerateFullPaths=true' ],
-							problemMatcher : '$msCompile'
-						};
-						return JSON.stringify(config, null, 4);
+				if (selection.autoDetect) {
+					this.outputService.showOutput(TaskService.OutputChannel);
+					this.outputService.append(TaskService.OutputChannel, nls.localize('ConfigureTaskRunnerAction.autoDetecting', 'Auto detecting tasks for {0}', selection.id) + '\n');
+					let detector = new ProcessRunnerDetector(this.fileService, this.contextService, new SystemVariables(this.editorService, this.contextService));
+					contentPromise = detector.detect(false, selection.id).then((value) => {
+						let config = value.config;
+						if (value.stderr && value.stderr.length > 0) {
+							value.stderr.forEach((line) => {
+								this.outputService.append(TaskService.OutputChannel, line + '\n');
+							});
+							this.messageService.show(Severity.Warning, nls.localize('ConfigureTaskRunnerAction.autoDetect', 'Auto detecting the task system failed. Using default template. Consult the task output for details.'));
+							return selection.content;
+						} else if (config) {
+							if (value.stdout && value.stdout.length > 0) {
+								value.stdout.forEach(line => this.outputService.append(TaskService.OutputChannel, line + '\n'));
+							}
+							let content = JSON.stringify(config, null, '\t');
+							content = [
+								'{',
+									'\t// See http://go.microsoft.com/fwlink/?LinkId=733558',
+									'\t// for the documentation about the tasks.json format',
+							].join('\n') + content.substr(1);
+							return content;
+						} else {
+							return selection.content;
+						}
 					});
+				} else {
+					contentPromise = TPromise.as(selection.content);
 				}
-				return contentPromise.then((content) => {
+				return contentPromise.then(content => {
 					return this.fileService.createFile(this.contextService.toResource('.vscode/tasks.json'), content);
 				});
 			});
 		}).then((stat) => {
-			// (2) Open editor with configuration file
+			if (!stat) {
+				return undefined;
+			}
+			// // (2) Open editor with configuration file
 			return this.editorService.openEditor({
 				resource: stat.resource,
 				options: {
 					forceOpen: true
 				}
-			}, sideBySide).then((value) => {
-				this.outputService.showOutput(TaskService.OutputChannel, true);
-				return value;
-			});
+			}, sideBySide);
 		}, (error) => {
 			throw new Error(nls.localize('ConfigureTaskRunnerAction.failed', "Unable to create the 'tasks.json' file inside the '.vscode' folder. Consult the task output for details."));
 		});
@@ -295,7 +309,7 @@ class RunTaskAction extends Action {
 }
 
 
-class StatusBarItem implements statusbar.IStatusbarItem {
+class StatusBarItem implements IStatusbarItem {
 
 	private quickOpenService: IQuickOpenService;
 	private markerService: IMarkerService;
@@ -452,7 +466,8 @@ class TaskService extends EventEmitter implements ITaskService {
 	private textFileService: ITextFileService;
 	private eventService: IEventService;
 	private modelService: IModelService;
-	private pluginService: IPluginService;
+	private extensionService: IExtensionService;
+	private quickOpenService: IQuickOpenService;
 
 	private _taskSystemPromise: TPromise<ITaskSystem>;
 	private _taskSystem: ITaskSystem;
@@ -467,7 +482,8 @@ class TaskService extends EventEmitter implements ITaskService {
 		@IFileService fileService:IFileService, @IWorkspaceContextService contextService: IWorkspaceContextService,
 		@ITelemetryService telemetryService: ITelemetryService, @ITextFileService textFileService:ITextFileService,
 		@ILifecycleService lifecycleService: ILifecycleService, @IEventService eventService: IEventService,
-		@IModelService modelService: IModelService, @IPluginService pluginService: IPluginService) {
+		@IModelService modelService: IModelService, @IExtensionService extensionService: IExtensionService,
+		@IQuickOpenService quickOpenService: IQuickOpenService) {
 
 		super();
 		this.modeService = modeService;
@@ -482,7 +498,8 @@ class TaskService extends EventEmitter implements ITaskService {
 		this.textFileService = textFileService;
 		this.eventService = eventService;
 		this.modelService = modelService;
-		this.pluginService = pluginService;
+		this.extensionService = extensionService;
+		this.quickOpenService = quickOpenService;
 
 		this.taskSystemListeners = [];
 		this.clearTaskSystemPromise = false;
@@ -570,7 +587,7 @@ class TaskService extends EventEmitter implements ITaskService {
 				return configPromise.then((config) => {
 					if (!config) {
 						this._taskSystemPromise = null;
-						throw new TaskError(Severity.Info, nls.localize('TaskSystem.noConfiguration', 'No task runner configured.'), 1);
+						throw new TaskError(Severity.Info, nls.localize('TaskSystem.noConfiguration', 'No task runner configured.'), TaskErrors.NotConfigured);
 					}
 					let result: ITaskSystem = null;
 					if (config.buildSystem === 'service') {
@@ -580,7 +597,7 @@ class TaskService extends EventEmitter implements ITaskService {
 					}
 					if (result === null) {
 						this._taskSystemPromise = null;
-						throw new TaskError(Severity.Info, nls.localize('TaskSystem.noBuildType', "No valid task runner configured. Supported task runners are 'service' and 'program'."));
+						throw new TaskError(Severity.Info, nls.localize('TaskSystem.noBuildType', "No valid task runner configured. Supported task runners are 'service' and 'program'."), TaskErrors.NoValidTaskRunner);
 					}
 					this.taskSystemListeners.push(result.addListener(TaskSystemEvents.Active, (event) => this.emit(TaskServiceEvents.Active, event)));
 					this.taskSystemListeners.push(result.addListener(TaskSystemEvents.Inactive, (event) => this.emit(TaskServiceEvents.Inactive, event)));
@@ -618,6 +635,12 @@ class TaskService extends EventEmitter implements ITaskService {
 		return ProcessRunnerDetector.supports(config.command);
 	}
 
+	public configureAction(): Action {
+		return new ConfigureTaskRunnerAction(ConfigureTaskRunnerAction.ID, ConfigureTaskRunnerAction.TEXT,
+			this.configurationService, this.editorService, this.fileService, this.contextService,
+			this.outputService, this.messageService, this.quickOpenService);
+	}
+
 	public build(): TPromise<ITaskSummary> {
 		return this.executeTarget(taskSystem => taskSystem.build());
 	}
@@ -634,11 +657,11 @@ class TaskService extends EventEmitter implements ITaskService {
 		return this.executeTarget(taskSystem => taskSystem.runTest());
 	}
 
-	public run(taskIdentifier:string): TPromise<ITaskSummary> {
+	public run(taskIdentifier: string): TPromise<ITaskSummary> {
 		return this.executeTarget(taskSystem => taskSystem.run(taskIdentifier));
 	}
 
-	private executeTarget(fn:(taskSystem:ITaskSystem) => ITaskRunResult): TPromise<ITaskSummary> {
+	private executeTarget(fn: (taskSystem: ITaskSystem) => ITaskRunResult): TPromise<ITaskSummary> {
 		return this.textFileService.saveAll().then((value) => {
 			return this.taskSystemPromise.
 				then((taskSystem) => {
@@ -646,7 +669,7 @@ class TaskService extends EventEmitter implements ITaskService {
 						if (!active) {
 							return fn(taskSystem);
 						} else {
-							throw new TaskError(Severity.Warning, nls.localize('TaskSystem.active', 'There is an active running task right now. Terminate it first before executing another task.'), 2);
+							throw new TaskError(Severity.Warning, nls.localize('TaskSystem.active', 'There is an active running task right now. Terminate it first before executing another task.'), TaskErrors.RunningTask);
 						}
 					});
 				}).
@@ -714,7 +737,7 @@ class TaskService extends EventEmitter implements ITaskService {
 		if (this._taskSystem && this._taskSystem.isActiveSync()) {
 			if (this._taskSystem.canAutoTerminate() || this.messageService.confirm({
 				message: nls.localize('TaskSystem.runningTask', 'There is a task running. Do you want to terminate it?'),
-				primaryButton: nls.localize('TaskSystem.terminateTask', "&&Terminate Task")
+				primaryButton: nls.localize({ key: 'TaskSystem.terminateTask', comment: ['&& denotes a mnemonic'] }, "&&Terminate Task")
 			})) {
 				return this._taskSystem.terminate().then((response) => {
 					if (response.success) {
@@ -739,10 +762,12 @@ class TaskService extends EventEmitter implements ITaskService {
 		let showOutput = true;
 		if (err instanceof TaskError) {
 			let buildError = <TaskError>err;
-			if (buildError.code === 1 || buildError.code === 2) {
+			let needsConfig = buildError.code === TaskErrors.NotConfigured || buildError.code === TaskErrors.NoBuildTask || buildError.code === TaskErrors.NoTestTask;
+			let needsTerminate = buildError.code === TaskErrors.RunningTask;
+			if (needsConfig || needsTerminate) {
 				let closeAction = new CloseMessageAction();
-				let action = buildError.code === 1
-					? new ConfigureTaskRunnerAction(ConfigureTaskRunnerAction.ID, ConfigureTaskRunnerAction.TEXT, this.configurationService, this.editorService, this.fileService, this.contextService, this.outputService, this.messageService)
+				let action = needsConfig
+					? this.configureAction()
 					: new TerminateAction(TerminateAction.ID, TerminateAction.TEXT, this, this.telemetryService);
 
 				closeAction.closeFunction = this.messageService.show(buildError.severity, { message: buildError.message, actions: [closeAction, action ] });
@@ -773,26 +798,26 @@ export class TaskServiceParticipant implements IWorkbenchContribution {
 	}
 }
 
+let tasksCategory = nls.localize('tasksCategory', "Tasks");
+let workbenchActionsRegistry = <IWorkbenchActionRegistry>Registry.as(WorkbenchActionExtensions.WorkbenchActions);
+workbenchActionsRegistry.registerWorkbenchAction(new SyncActionDescriptor(ConfigureTaskRunnerAction, ConfigureTaskRunnerAction.ID, ConfigureTaskRunnerAction.TEXT), tasksCategory);
 if (Env.enableTasks) {
 
 	// Task Service
 	registerSingleton(ITaskService, TaskService);
 
 	// Actions
-	let tasksCategory = nls.localize('tasksCategory', "Tasks");
-	let workbenchActionsRegistry = <workbenchActionRegistry.IWorkbenchActionRegistry>Registry.as(workbenchActionRegistry.Extensions.WorkbenchActions);
 	workbenchActionsRegistry.registerWorkbenchAction(new SyncActionDescriptor(BuildAction, BuildAction.ID, BuildAction.TEXT, { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KEY_B }), tasksCategory);
 	workbenchActionsRegistry.registerWorkbenchAction(new SyncActionDescriptor(TestAction, TestAction.ID, TestAction.TEXT, { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KEY_T }), tasksCategory);
 	// workbenchActionsRegistry.registerWorkbenchAction(new SyncActionDescriptor(RebuildAction, RebuildAction.ID, RebuildAction.TEXT), tasksCategory);
 	// workbenchActionsRegistry.registerWorkbenchAction(new SyncActionDescriptor(CleanAction, CleanAction.ID, CleanAction.TEXT), tasksCategory);
 	workbenchActionsRegistry.registerWorkbenchAction(new SyncActionDescriptor(TerminateAction, TerminateAction.ID, TerminateAction.TEXT), tasksCategory);
-	workbenchActionsRegistry.registerWorkbenchAction(new SyncActionDescriptor(ConfigureTaskRunnerAction, ConfigureTaskRunnerAction.ID, ConfigureTaskRunnerAction.TEXT), tasksCategory);
 	workbenchActionsRegistry.registerWorkbenchAction(new SyncActionDescriptor(ShowLogAction, ShowLogAction.ID, ShowLogAction.TEXT), tasksCategory);
 	workbenchActionsRegistry.registerWorkbenchAction(new SyncActionDescriptor(RunTaskAction, RunTaskAction.ID, RunTaskAction.TEXT), tasksCategory);
 
 	// Register Quick Open
-	(<QuickOpen.IQuickOpenRegistry>Registry.as(QuickOpen.Extensions.Quickopen)).registerQuickOpenHandler(
-		new QuickOpen.QuickOpenHandlerDescriptor(
+	(<IQuickOpenRegistry>Registry.as(QuickOpenExtensions.Quickopen)).registerQuickOpenHandler(
+		new QuickOpenHandlerDescriptor(
 			'vs/workbench/parts/tasks/browser/taskQuickOpen',
 			'QuickOpenHandler',
 			'task ',
@@ -801,8 +826,8 @@ if (Env.enableTasks) {
 	);
 
 	// Status bar
-	let statusbarRegistry = <statusbar.IStatusbarRegistry>Registry.as(statusbar.Extensions.Statusbar);
-	statusbarRegistry.registerStatusbarItem(new statusbar.StatusbarItemDescriptor(StatusBarItem, statusbar.StatusbarAlignment.LEFT, 50 /* Medium Priority */));
+	let statusbarRegistry = <IStatusbarRegistry>Registry.as(StatusbarExtensions.Statusbar);
+	statusbarRegistry.registerStatusbarItem(new StatusbarItemDescriptor(StatusBarItem, StatusbarAlignment.LEFT, 50 /* Medium Priority */));
 
 	// Output channel
 	let outputChannelRegistry = <IOutputChannelRegistry>Registry.as(OutputExt.OutputChannels);
@@ -965,7 +990,7 @@ if (Env.enableTasks) {
 						'severity': {
 							'type': 'string',
 							'enum': ['error', 'warning', 'info'],
-							'description': nls.localize('JsonSchema.problemMatcher.severity', 'The default severity for captures problems. Is used if the pattern doesn\' define a match group for severity.')
+							'description': nls.localize('JsonSchema.problemMatcher.severity', 'The default severity for captures problems. Is used if the pattern doesn\'t define a match group for severity.')
 						},
 						'applyTo': {
 							'type': 'string',
@@ -1062,6 +1087,9 @@ if (Env.enableTasks) {
 								},
 								'env': {
 									'type': 'object',
+									'additionalProperties': {
+										'type': 'string'
+									},
 									'description': nls.localize('JsonSchema.options.env', 'The environment of the executed program or shell. If omitted the parent process\' environment is used.')
 								}
 							},
@@ -1160,7 +1188,15 @@ if (Env.enableTasks) {
 							'$ref': '#/definitions/problemMatcherType',
 							'description': nls.localize('JsonSchema.tasks.matchers', 'The problem matcher(s) to use. Can either be a string or a problem matcher definition or an array of strings and problem matchers.')
 						}
-					}
+					},
+					'defaultSnippets': [
+						{
+							'label': 'Empty task',
+							'body': {
+								'taskName': '{{taskName}}'
+							}
+						}
+					]
 				}
 			},
 			'allOf': [

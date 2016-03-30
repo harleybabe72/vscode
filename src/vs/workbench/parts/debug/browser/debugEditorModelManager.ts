@@ -134,24 +134,24 @@ export class DebugEditorModelManager implements IWorkbenchContribution {
 		const result: editorcommon.IModelDeltaDecoration[] = [];
 		const focusedStackFrame = this.debugService.getViewModel().getFocusedStackFrame();
 		const allThreads = this.debugService.getModel().getThreads();
-		if (!focusedStackFrame || !allThreads[focusedStackFrame.threadId] || !allThreads[focusedStackFrame.threadId].callStack) {
+		if (!focusedStackFrame || !allThreads[focusedStackFrame.threadId] || !allThreads[focusedStackFrame.threadId].getCachedCallStack()) {
 			return result;
 		}
 
 		// only show decorations for the currently focussed thread.
 		const thread = allThreads[focusedStackFrame.threadId];
-		thread.callStack.filter(sf => sf.source.uri.toString() === modelUrlStr).forEach(sf => {
+		thread.getCachedCallStack().filter(sf => sf.source.uri.toString() === modelUrlStr).forEach(sf => {
 			const wholeLineRange = createRange(sf.lineNumber, sf.column, sf.lineNumber, Number.MAX_VALUE);
 
 			// compute how to decorate the editor. Different decorations are used if this is a top stack frame, focussed stack frame,
 			// an exception or a stack frame that did not change the line number (we only decorate the columns, not the whole line).
-			if (sf === thread.callStack[0]) {
+			if (sf === thread.getCachedCallStack()[0]) {
 				result.push({
 					options: DebugEditorModelManager.TOP_STACK_FRAME_MARGIN,
 					range: createRange(sf.lineNumber, sf.column, sf.lineNumber, sf.column + 1)
 				});
 
-				if (thread.stoppedReason === 'exception') {
+				if (thread.stoppedDetails.reason === 'exception') {
 					result.push({
 						options: DebugEditorModelManager.TOP_STACK_FRAME_EXCEPTION_DECORATION,
 						range: wholeLineRange
@@ -282,7 +282,7 @@ export class DebugEditorModelManager implements IWorkbenchContribution {
 		}
 
 		return result ? result :
-			!session || session.capablities.supportsConditionalBreakpoints ? {
+			!session || session.capabilities.supportsConditionalBreakpoints ? {
 				glyphMarginClassName: 'debug-breakpoint-conditional-glyph',
 				hoverMessage: breakpoint.condition,
 				stickiness: editorcommon.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
@@ -305,13 +305,13 @@ export class DebugEditorModelManager implements IWorkbenchContribution {
 
 	private static BREAKPOINT_UNVERIFIED_DECORATION: editorcommon.IModelDecorationOptions = {
 		glyphMarginClassName: 'debug-breakpoint-unverified-glyph',
-		hoverMessage: nls.localize('breakpointDisabledHover', "Unverified Breakpoint"),
+		hoverMessage: nls.localize('breakpointUnverifieddHover', "Unverified Breakpoint"),
 		stickiness: editorcommon.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
 	};
 
 	private static BREAKPOINT_DIRTY_DECORATION: editorcommon.IModelDecorationOptions = {
 		glyphMarginClassName: 'debug-breakpoint-unverified-glyph',
-		hoverMessage: nls.localize('breakpointDisabledHover', "Unverified breakpoint. File is modified, please restart debug session."),
+		hoverMessage: nls.localize('breakpointDirtydHover', "Unverified breakpoint. File is modified, please restart debug session."),
 		stickiness: editorcommon.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
 	};
 

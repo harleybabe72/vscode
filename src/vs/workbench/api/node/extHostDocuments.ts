@@ -49,7 +49,7 @@ export function getWordDefinitionFor(modeId: string): RegExp {
 	return _modeId2WordDefinition[modeId];
 }
 
-@Remotable.PluginHostContext('ExtHostModelService')
+@Remotable.ExtHostContext('ExtHostModelService')
 export class ExtHostModelService {
 
 	private static _handlePool: number = 0;
@@ -494,13 +494,19 @@ export class MainThreadDocuments {
 		modelService.onModelModeChanged(this._onModelModeChanged, this, this._toDispose);
 
 		this._toDispose.push(eventService.addListener2(FileEventType.FILE_SAVED, (e: LocalFileChangeEvent) => {
-			this._proxy._acceptModelSaved(e.getAfter().resource.toString());
+			if (this._shouldHandleFileEvent(e)) {
+				this._proxy._acceptModelSaved(e.getAfter().resource.toString());
+			}
 		}));
 		this._toDispose.push(eventService.addListener2(FileEventType.FILE_REVERTED, (e: LocalFileChangeEvent) => {
-			this._proxy._acceptModelReverted(e.getAfter().resource.toString());
+			if (this._shouldHandleFileEvent(e)) {
+				this._proxy._acceptModelReverted(e.getAfter().resource.toString());
+			}
 		}));
 		this._toDispose.push(eventService.addListener2(FileEventType.FILE_DIRTY, (e: LocalFileChangeEvent) => {
-			this._proxy._acceptModelDirty(e.getAfter().resource.toString());
+			if (this._shouldHandleFileEvent(e)) {
+				this._proxy._acceptModelDirty(e.getAfter().resource.toString());
+			}
 		}));
 
 		const handle = setInterval(() => this._runDocumentCleanup(), 30 * 1000);
@@ -517,6 +523,12 @@ export class MainThreadDocuments {
 		});
 		this._modelToDisposeMap = Object.create(null);
 		this._toDispose = disposeAll(this._toDispose);
+	}
+
+	private _shouldHandleFileEvent(e: LocalFileChangeEvent): boolean {
+		const after = e.getAfter();
+		const model = this._modelService.getModel(after.resource);
+		return model && !model.isTooLargeForHavingARichMode();
 	}
 
 	private _onModelAdded(model: EditorCommon.IModel): void {
@@ -572,7 +584,7 @@ export class MainThreadDocuments {
 		}
 	}
 
-	// --- from plugin host process
+	// --- from extension host process
 
 	_trySaveDocument(uri: URI): TPromise<boolean> {
 		return this._textFileService.save(uri);

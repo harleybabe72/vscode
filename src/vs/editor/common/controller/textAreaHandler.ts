@@ -4,17 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 'use strict';
 
-import {IEditorRange, IEditorPosition, EndOfLinePreference} from 'vs/editor/common/editorCommon';
 import {RunOnceScheduler} from 'vs/base/common/async';
-import {Disposable} from 'vs/base/common/lifecycle';
-import {Range} from 'vs/editor/common/core/range';
-import {Position} from 'vs/editor/common/core/position';
-import {CommonKeybindings} from 'vs/base/common/keyCodes';
-import {
-	IKeyboardEventWrapper, ITextAreaWrapper, IClipboardEvent, ISimpleModel,
-	TextAreaState, createTextAreaState, ITypeData, TextAreaStrategy
-} from 'vs/editor/common/controller/textAreaState';
 import Event, {Emitter} from 'vs/base/common/event';
+import {CommonKeybindings} from 'vs/base/common/keyCodes';
+import {Disposable} from 'vs/base/common/lifecycle';
+import {IClipboardEvent, IKeyboardEventWrapper, ISimpleModel, ITextAreaWrapper, ITypeData, TextAreaState, TextAreaStrategy, createTextAreaState} from 'vs/editor/common/controller/textAreaState';
+import {Position} from 'vs/editor/common/core/position';
+import {Range} from 'vs/editor/common/core/range';
+import {EndOfLinePreference, IEditorPosition, IEditorRange} from 'vs/editor/common/editorCommon';
 
 enum ReadFromTextArea {
 	Type,
@@ -65,6 +62,7 @@ export class TextAreaHandler extends Disposable {
 	private Browser:IBrowser;
 	private textArea:ITextAreaWrapper;
 	private model:ISimpleModel;
+	private flushAnyAccumulatedEvents:()=>void;
 
 	private selection:IEditorRange;
 	private selections:IEditorRange[];
@@ -83,11 +81,12 @@ export class TextAreaHandler extends Disposable {
 
 	private _nextCommand: ReadFromTextArea;
 
-	constructor(Browser:IBrowser, strategy:TextAreaStrategy, textArea:ITextAreaWrapper, model:ISimpleModel) {
+	constructor(Browser:IBrowser, strategy:TextAreaStrategy, textArea:ITextAreaWrapper, model:ISimpleModel, flushAnyAccumulatedEvents:()=>void) {
 		super();
 		this.Browser = Browser;
 		this.textArea = textArea;
 		this.model = model;
+		this.flushAnyAccumulatedEvents = flushAnyAccumulatedEvents;
 		this.selection = new Range(1, 1, 1, 1);
 		this.selections = [new Range(1, 1, 1, 1)];
 		this.cursorPosition = new Position(1, 1);
@@ -184,11 +183,15 @@ export class TextAreaHandler extends Disposable {
 		// --- Clipboard operations
 
 		this._register(this.textArea.onCut((e) => {
+			// Ensure we have the latest selection => ask all pending events to be sent
+			this.flushAnyAccumulatedEvents();
 			this._ensureClipboardGetsEditorSelection(e);
 			this.asyncTriggerCut.schedule();
 		}));
 
 		this._register(this.textArea.onCopy((e) => {
+			// Ensure we have the latest selection => ask all pending events to be sent
+			this.flushAnyAccumulatedEvents();
 			this._ensureClipboardGetsEditorSelection(e);
 		}));
 

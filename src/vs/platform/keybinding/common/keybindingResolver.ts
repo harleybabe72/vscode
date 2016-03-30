@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 'use strict';
 
-import * as defaultPlatform from 'vs/base/common/platform';
-import {IKeybindingItem, KbExpr, IUserFriendlyKeybinding} from 'vs/platform/keybinding/common/keybindingService';
-import {BinaryKeybindings, Keybinding, ISimplifiedPlatform} from 'vs/base/common/keyCodes';
+import {BinaryKeybindings, ISimplifiedPlatform, Keybinding} from 'vs/base/common/keyCodes';
+import * as platform from 'vs/base/common/platform';
+import {IKeybindingItem, IUserFriendlyKeybinding, KbExpr} from 'vs/platform/keybinding/common/keybindingService';
 
 export interface IResolveResult {
 	enterChord: number;
@@ -327,16 +327,17 @@ export class OutputBuilder {
 export class IOSupport {
 
 	public static writeKeybindingItem(out: OutputBuilder, item: IKeybindingItem): void {
-		out.write('{ "key": ' + rightPaddedString('"' + IOSupport.writeKeybinding(item.keybinding).replace(/\\/g, '\\\\') + '",', 25) + ' "command": ');
+		let quotedSerializedKeybinding = JSON.stringify(IOSupport.writeKeybinding(item.keybinding));
+		out.write(`{ "key": ${rightPaddedString(quotedSerializedKeybinding + ',', 25)} "command": `);
+
 		let serializedContext = item.context ? item.context.serialize() : '';
+		let quotedSerializeCommand = JSON.stringify(item.command);
 		if (serializedContext.length > 0) {
-			out.write('"' + item.command + '",');
+			out.write(`${quotedSerializeCommand},`);
 			out.writeLine();
-			out.write('                                     "when": "');
-			out.write(serializedContext);
-			out.write('" ');
+			out.write(`                                     "when": "${serializedContext}" `);
 		} else {
-			out.write('"' + item.command + '" ');
+			out.write(`${quotedSerializeCommand} `);
 		}
 		//		out.write(String(item.weight));
 		out.write('}');
@@ -354,11 +355,11 @@ export class IOSupport {
 		};
 	}
 
-	public static writeKeybinding(input: number, Platform: ISimplifiedPlatform = defaultPlatform): string {
+	public static writeKeybinding(input: number, Platform: ISimplifiedPlatform = platform): string {
 		return Keybinding.toUserSettingsLabel(input, Platform);
 	}
 
-	public static readKeybinding(input: string, Platform: ISimplifiedPlatform = defaultPlatform): number {
+	public static readKeybinding(input: string, Platform: ISimplifiedPlatform = platform): number {
 		return Keybinding.fromUserSettingsLabel(input, Platform);
 	}
 

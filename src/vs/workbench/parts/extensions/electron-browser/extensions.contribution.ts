@@ -4,79 +4,62 @@
  *--------------------------------------------------------------------------------------------*/
 
 import nls = require('vs/nls');
+import 'vs/css!./media/extensions';
 import { Registry } from 'vs/platform/platform';
 import { registerSingleton } from 'vs/platform/instantiation/common/extensions';
-import statusbar = require('vs/workbench/browser/parts/statusbar/statusbar');
-import { ExtensionsStatusbarItem, ExtensionTipsStatusbarItem } from 'vs/workbench/parts/extensions/electron-browser/extensionsWidgets';
-import { IGalleryService } from 'vs/workbench/parts/extensions/common/extensions';
-import { GalleryService } from 'vs/workbench/parts/extensions/node/vsoGalleryService';
+import { IStatusbarRegistry, Extensions as StatusbarExtensions, StatusbarItemDescriptor, StatusbarAlignment } from 'vs/workbench/browser/parts/statusbar/statusbar';
+import { ExtensionsStatusbarItem } from 'vs/workbench/parts/extensions/electron-browser/extensionsWidgets';
+import { IGalleryService, ExtensionsLabel } from 'vs/workbench/parts/extensions/common/extensions';
+import { GalleryService } from 'vs/workbench/parts/extensions/common/vsoGalleryService';
 import { IWorkbenchContributionsRegistry, Extensions as WorkbenchExtensions } from 'vs/workbench/common/contributions';
 import { ExtensionsWorkbenchExtension } from 'vs/workbench/parts/extensions/electron-browser/extensionsWorkbenchExtension';
-import ConfigurationRegistry = require('vs/platform/configuration/common/configurationRegistry');
 import { IViewletService } from 'vs/workbench/services/viewlet/common/viewletService';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { ViewletRegistry, Extensions as ViewletExtensions, ViewletDescriptor, ToggleViewletAction } from 'vs/workbench/browser/viewlet';
 import { IWorkbenchActionRegistry, Extensions as ActionExtensions } from 'vs/workbench/common/actionRegistry';
 import { SyncActionDescriptor } from 'vs/platform/actions/common/actions';
+import { IOutputChannelRegistry, Extensions as OutputExtensions } from 'vs/workbench/parts/output/common/output';
 
-// Register Gallery Service
 registerSingleton(IGalleryService, GalleryService);
 
-// Register Extensions Workbench Extension
-(<IWorkbenchContributionsRegistry>Registry.as(WorkbenchExtensions.Workbench)).registerWorkbenchContribution(
-	ExtensionsWorkbenchExtension
-);
-
-// Register Statusbar item
-(<statusbar.IStatusbarRegistry>Registry.as(statusbar.Extensions.Statusbar)).registerStatusbarItem(new statusbar.StatusbarItemDescriptor(
-	ExtensionsStatusbarItem,
-	statusbar.StatusbarAlignment.LEFT,
-	10 /* Low Priority */
-));
-
-// Register Statusbar item
-(<statusbar.IStatusbarRegistry>Registry.as(statusbar.Extensions.Statusbar)).registerStatusbarItem(new statusbar.StatusbarItemDescriptor(
-	ExtensionTipsStatusbarItem,
-	statusbar.StatusbarAlignment.LEFT,
-	9 /* Low Priority */
-));
-
-
-(<ConfigurationRegistry.IConfigurationRegistry>Registry.as(ConfigurationRegistry.Extensions.Configuration)).registerConfiguration({
-	id: 'extensions',
-	type: 'object',
-	properties: {
-		'extensions.showTips': {
-			type: 'boolean',
-			default: false,
-			description: nls.localize('extConfig', "Suggest extensions based on changed and open files."),
-		}
-	}
-});
-
-export var VIEWLET_ID = 'workbench.view.extensions';
+export const ViewletId = 'workbench.view.extensions';
 
 class OpenExtensionsViewletAction extends ToggleViewletAction {
-	public static ID = VIEWLET_ID;
+
+	public static ID = ViewletId;
 	public static LABEL = nls.localize('toggleExtensionsViewlet', "Show Extensions");
 
 	constructor(id: string, label: string, @IViewletService viewletService: IViewletService, @IWorkbenchEditorService editorService: IWorkbenchEditorService) {
-		super(id, label, VIEWLET_ID, viewletService, editorService);
+		super(id, label, ViewletId, viewletService, editorService);
 	}
 }
 
-// Register Action to Open Viewlet
-(<IWorkbenchActionRegistry> Registry.as(ActionExtensions.WorkbenchActions)).registerWorkbenchAction(
-	new SyncActionDescriptor(OpenExtensionsViewletAction, OpenExtensionsViewletAction.ID, OpenExtensionsViewletAction.LABEL),
-	nls.localize('view', "View")
+const actionDescriptor = new SyncActionDescriptor(
+	OpenExtensionsViewletAction,
+	OpenExtensionsViewletAction.ID,
+	OpenExtensionsViewletAction.LABEL
 );
 
-// Register Viewlet
-(<ViewletRegistry>Registry.as(ViewletExtensions.Viewlets)).registerViewlet(new ViewletDescriptor(
+const viewletDescriptor = new ViewletDescriptor(
 	'vs/workbench/parts/extensions/electron-browser/extensionsViewlet',
 	'ExtensionsViewlet',
-	VIEWLET_ID,
+	ViewletId,
 	nls.localize('extensions', "Extensions"),
 	'git',
 	200
-));
+);
+
+Registry.as<IWorkbenchActionRegistry>(ActionExtensions.WorkbenchActions)
+	.registerWorkbenchAction(actionDescriptor, nls.localize('view', "View"));
+
+Registry.as<ViewletRegistry>(ViewletExtensions.Viewlets)
+	.registerViewlet(viewletDescriptor);
+
+Registry.as<IWorkbenchContributionsRegistry>(WorkbenchExtensions.Workbench)
+	.registerWorkbenchContribution(ExtensionsWorkbenchExtension);
+
+Registry.as<IStatusbarRegistry>(StatusbarExtensions.Statusbar)
+	.registerStatusbarItem(new StatusbarItemDescriptor(ExtensionsStatusbarItem, StatusbarAlignment.LEFT,10000));
+
+Registry.as<IOutputChannelRegistry>(OutputExtensions.OutputChannels)
+	.registerChannel(ExtensionsLabel);

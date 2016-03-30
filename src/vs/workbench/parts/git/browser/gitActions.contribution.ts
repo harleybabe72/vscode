@@ -28,7 +28,7 @@ import {IFileService} from 'vs/platform/files/common/files';
 import {IInstantiationService} from 'vs/platform/instantiation/common/instantiation';
 import wbar = require('vs/workbench/common/actionRegistry');
 import { SyncActionDescriptor } from 'vs/platform/actions/common/actions';
-import { OpenChangeAction, SyncAction, PullAction, PushAction, PublishAction, StartGitBranchAction, StartGitCheckoutAction } from './gitActions';
+import { OpenChangeAction, OpenFileAction, SyncAction, PullAction, PushAction, PublishAction, StartGitBranchAction, StartGitCheckoutAction } from './gitActions';
 import paths = require('vs/base/common/paths');
 import URI from 'vs/base/common/uri';
 
@@ -44,7 +44,7 @@ function getStatus(gitService: IGitService, contextService: IWorkspaceContextSer
 
 class OpenInDiffAction extends baseeditor.EditorInputAction {
 
-	static ID = 'workbench.git.action.openInDiff';
+	static ID = 'workbench.action.git.openInDiff';
 	static Label = nls.localize('switchToChangesView', "Switch to Changes View");
 
 	private gitService: IGitService;
@@ -135,7 +135,7 @@ class OpenInDiffAction extends baseeditor.EditorInputAction {
 class OpenInEditorAction extends baseeditor.EditorInputAction {
 
 	private static DELETED_STATES = [Status.BOTH_DELETED, Status.DELETED, Status.DELETED_BY_US, Status.INDEX_DELETED];
-	static ID = 'workbench.git.action.openInEditor';
+	static ID = 'workbench.action.git.openInEditor';
 	static LABEL = nls.localize('openInEditor', "Switch to Editor View");
 
 	private gitService: IGitService;
@@ -250,7 +250,7 @@ export class StageRangesAction extends baseeditor.EditorInputAction {
 	private editor:editorbrowser.IDiffEditor;
 
 	constructor(editor:tdeditor.TextDiffEditor, @IGitService gitService: IGitService, @IWorkbenchEditorService editorService : IWorkbenchEditorService) {
-		super('workbench.git.action.stageRanges', nls.localize('stageSelectedLines', "Stage Selected Lines"));
+		super('workbench.action.git.stageRanges', nls.localize('stageSelectedLines', "Stage Selected Lines"));
 
 		this.editorService = editorService;
 		this.gitService = gitService;
@@ -366,7 +366,7 @@ class GitWorkingTreeDiffEditorActionContributor extends baseeditor.EditorInputAc
 
 class GlobalOpenChangeAction extends OpenChangeAction {
 
-	static ID = 'workbench.git.action.globalOpenChange';
+	static ID = 'workbench.action.git.globalOpenChange';
 	static LABEL = nls.localize('openChange', "Open Change");
 
 	constructor(
@@ -428,6 +428,39 @@ class GlobalOpenChangeAction extends OpenChangeAction {
 	}
 }
 
+class GlobalOpenInEditorAction extends OpenFileAction {
+
+	static ID = 'workbench.action.git.globalOpenFile';
+	static LABEL = nls.localize('openFile', "Open File");
+
+	constructor(
+		id = GlobalOpenInEditorAction.ID,
+		label = GlobalOpenInEditorAction.LABEL,
+		@IWorkbenchEditorService editorService: IWorkbenchEditorService,
+		@IFileService fileService: IFileService,
+		@IGitService gitService: IGitService,
+		@IWorkspaceContextService contextService: IWorkspaceContextService
+	) {
+		super(editorService, fileService, gitService, contextService);
+	}
+
+	public run(event?: any): TPromise<any> {
+		const input = WorkbenchEditorCommon.asFileEditorInput(this.editorService.getActiveEditorInput(), true);
+
+		if (!input) {
+			return TPromise.as(null);
+		}
+
+		const status = getStatus(this.gitService, this.contextService, input);
+
+		if (!status) {
+			return TPromise.as(null);
+		}
+
+		return super.run(status);
+	}
+}
+
 var actionBarRegistry = <abr.IActionBarRegistry> platform.Registry.as(abr.Extensions.Actionbar);
 actionBarRegistry.registerActionBarContributor(abr.Scope.EDITOR, FileEditorActionContributor);
 actionBarRegistry.registerActionBarContributor(abr.Scope.EDITOR, GitEditorActionContributor);
@@ -438,6 +471,7 @@ let workbenchActionRegistry = (<wbar.IWorkbenchActionRegistry> platform.Registry
 // Register Actions
 const category = nls.localize('git', "Git");
 workbenchActionRegistry.registerWorkbenchAction(new SyncActionDescriptor(GlobalOpenChangeAction, GlobalOpenChangeAction.ID, GlobalOpenChangeAction.LABEL), category);
+workbenchActionRegistry.registerWorkbenchAction(new SyncActionDescriptor(GlobalOpenInEditorAction, GlobalOpenInEditorAction.ID, GlobalOpenInEditorAction.LABEL), category);
 workbenchActionRegistry.registerWorkbenchAction(new SyncActionDescriptor(PullAction, PullAction.ID, PullAction.LABEL), category);
 workbenchActionRegistry.registerWorkbenchAction(new SyncActionDescriptor(PushAction, PushAction.ID, PushAction.LABEL), category);
 workbenchActionRegistry.registerWorkbenchAction(new SyncActionDescriptor(SyncAction, SyncAction.ID, SyncAction.LABEL), category);

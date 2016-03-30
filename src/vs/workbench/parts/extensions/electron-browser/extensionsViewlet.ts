@@ -11,10 +11,10 @@ import { Builder } from 'vs/base/browser/builder';
 import { emmet as $, append, addClass, removeClass } from 'vs/base/browser/dom';
 import { Viewlet } from 'vs/workbench/browser/viewlet';
 import { Dimension } from 'vs/base/browser/builder';
-import { VIEWLET_ID } from './extensions.contribution';
+import { ViewletId } from './extensions.contribution';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
-import { IRenderer, IDelegate, IFocusChangeEvent, ISelectionChangeEvent } from 'vs/base/browser/ui/list/list';
+import { IRenderer, IDelegate } from 'vs/base/browser/ui/list/list';
 import { List } from 'vs/base/browser/ui/list/listWidget';
 import { IExtension, IExtensionsService } from '../common/extensions';
 import { HighlightedLabel, IHighlight } from 'vs/base/browser/ui/highlightedlabel/highlightedLabel';
@@ -50,9 +50,9 @@ interface IExtensionEntry {
 	state: ExtensionState;
 }
 
-function extensionEquals(one: IExtension, other: IExtension): boolean {
-	return one.publisher === other.publisher && one.name === other.name;
-}
+// function extensionEquals(one: IExtension, other: IExtension): boolean {
+// 	return one.publisher === other.publisher && one.name === other.name;
+// }
 
 function getHighlights(input: string, extension: IExtension): IHighlights {
 	const name = matchesContiguousSubString(input, extension.name) || [];
@@ -119,7 +119,7 @@ class Renderer implements IRenderer<IExtensionEntry, ITemplateData> {
 		const extension = entry.extension;
 		const publisher = extension.galleryInformation ? extension.galleryInformation.publisherDisplayName : extension.publisher;
 		const installCount = extension.galleryInformation ? extension.galleryInformation.installCount : null;
-		const actionOptions = { icon: true, label: false };
+		// const actionOptions = { icon: true, label: false };
 
 		const updateActions = () => {
 			data.actionbar.clear();
@@ -144,19 +144,19 @@ class Renderer implements IRenderer<IExtensionEntry, ITemplateData> {
 			}
 		};
 
-		const onExtensionStateChange = (e: IExtension, state: ExtensionState) => {
-			if (extensionEquals(e, extension)) {
-				entry.state = state;
-				updateActions();
-			}
-		};
+		// const onExtensionStateChange = (e: IExtension, state: ExtensionState) => {
+		// 	if (extensionEquals(e, extension)) {
+		// 		entry.state = state;
+		// 		updateActions();
+		// 	}
+		// };
 
 		data.actionbar.context = extension;
 		updateActions();
 
 		data.disposables = disposeAll(data.disposables);
-		data.disposables.push(this.extensionsService.onDidInstallExtension(e => onExtensionStateChange(e, ExtensionState.Installed)));
-		data.disposables.push(this.extensionsService.onDidUninstallExtension(e => onExtensionStateChange(e, ExtensionState.Uninstalled)));
+		// data.disposables.push(this.extensionsService.onDidInstallExtension(e => onExtensionStateChange(e.extension, ExtensionState.Installed)));
+		// data.disposables.push(this.extensionsService.onDidUninstallExtension(e => onExtensionStateChange(e, ExtensionState.Uninstalled)));
 
 		data.displayName.set(extension.displayName, entry.highlights.displayName);
 		data.displayName.element.title = extension.name;
@@ -202,7 +202,7 @@ export class ExtensionsViewlet extends Viewlet {
 		@IInstantiationService private instantiationService: IInstantiationService,
 		@ITelemetryService telemetryService: ITelemetryService
 	) {
-		super(VIEWLET_ID, telemetryService)
+		super(ViewletId, telemetryService);
 	}
 
 	create(parent: Builder): TPromise<void> {

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 'use strict';
 
+import { TPromise } from 'vs/base/common/winjs.base';
 import Lifecycle = require('vs/base/common/lifecycle');
 import Timer = require('vs/base/common/timer');
 import {createDecorator, ServiceIdentifier, IInstantiationService} from 'vs/platform/instantiation/common/instantiation';
@@ -47,7 +48,7 @@ export interface ITelemetryService extends Lifecycle.IDisposable {
 	 */
 	getMachineId(): string;
 
-	getTelemetryInfo(): Thenable<ITelemetryInfo>;
+	getTelemetryInfo(): TPromise<ITelemetryInfo>;
 
 	/**
 	 * Appender operations
@@ -61,6 +62,17 @@ export interface ITelemetryService extends Lifecycle.IDisposable {
 
 export interface ITelemetryAppender extends Lifecycle.IDisposable {
 	log(eventName: string, data?: any): void;
+}
+
+export interface ITelemetryServiceConfig {
+	enableTelemetry?: boolean;
+	userOptIn?: boolean;
+
+	enableHardIdle?: boolean;
+	enableSoftIdle?: boolean;
+	sessionID?: string;
+	commitHash?: string;
+	version?: string;
 }
 
 export function anonymize(input: string): string {

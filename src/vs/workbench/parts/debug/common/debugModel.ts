@@ -12,7 +12,10 @@ import severity from 'vs/base/common/severity';
 import types = require('vs/base/common/types');
 import arrays = require('vs/base/common/arrays');
 import debug = require('vs/workbench/parts/debug/common/debug');
+import errors = require('vs/base/common/errors');
 import { Source } from 'vs/workbench/parts/debug/common/debugSource';
+
+const MAX_REPL_LENGTH = 10000;
 
 function resolveChildren(debugService: debug.IDebugService, parent: debug.IExpressionContainer): TPromise<Variable[]> {
 	const session = debugService.getActiveSession();
@@ -22,7 +25,7 @@ function resolveChildren(debugService: debug.IDebugService, parent: debug.IExpre
 	}
 
 	return session.variables({ variablesReference: parent.reference }).then(response => {
-		return arrays.distinct(response.body.variables, v => v.name).map(
+		return arrays.distinct(response.body.variables.filter(v => !!v), v => v.name).map(
 			v => new Variable(parent, v.variablesReference, v.name, v.value)
 		);
 	}, (e: Error) => [new Variable(parent, 0, null, e.message, false)]);
@@ -89,15 +92,56 @@ export function getFullExpressionName(expression: debug.IExpression, sessionType
 }
 
 export class Thread implements debug.IThread {
+	private promisedCallStack: TPromise<debug.IStackFrame[]>;
+	private cachedCallStack: debug.IStackFrame[];
+	public stoppedDetails: debug.IRawStoppedDetails;
+	public stopped: boolean;
 
-	public stoppedReason: string;
-
-	constructor(public name: string, public threadId, public callStack: debug.IStackFrame[]) {
-		this.stoppedReason = undefined;
+	constructor(public name: string, public threadId) {
+		this.promisedCallStack = undefined;
+		this.stoppedDetails = undefined;
+		this.cachedCallStack = undefined;
+		this.stopped = false;
 	}
 
 	public getId(): string {
 		return `thread:${ this.name }:${ this.threadId }`;
+	}
+
+	public clearCallStack(): void {
+		this.promisedCallStack = undefined;
+		this.cachedCallStack = undefined;
+	}
+
+	public getCachedCallStack(): debug.IStackFrame[] {
+		return this.cachedCallStack;
+	}
+
+	public getCallStack(debugService: debug.IDebugService): TPromise<debug.IStackFrame[]> {
+		if (!this.stopped) {
+			return TPromise.as([]);
+		}
+		if (!this.promisedCallStack) {
+			this.promisedCallStack = this.getCallStackImpl(debugService);
+			this.promisedCallStack.then(result => {
+				this.cachedCallStack = result;
+			}, errors.onUnexpectedError);
+		}
+
+		return this.promisedCallStack;
+	}
+
+	private getCallStackImpl(debugService: debug.IDebugService): TPromise<debug.IStackFrame[]> {
+		let session = debugService.getActiveSession();
+		return session.stackTrace({ threadId: this.threadId, levels: 20 }).then(response => {
+			return response.body.stackFrames.map((rsf, level) => {
+				if (!rsf) {
+					return new StackFrame(this.threadId, 0, new Source({ name: 'unknown' }, false), nls.localize('unknownStack', "Unknown stack location"), undefined, undefined);
+				}
+
+				return new StackFrame(this.threadId, rsf.id, rsf.source ? new Source(rsf.source) : new Source({ name: 'unknown' }, false), rsf.name, rsf.line, rsf.column);
+			});
+		});
 	}
 }
 
@@ -320,7 +364,7 @@ export class ExceptionBreakpoint implements debug.IExceptionBreakpoint {
 
 	private id: string;
 
-	constructor(public name: string, public enabled: boolean) {
+	constructor(public filter: string, public label: string, public enabled: boolean) {
 		this.id = uuid.generateUuid();
 	}
 
@@ -357,8 +401,8 @@ export class Model extends ee.EventEmitter implements debug.IModel {
 			if (removeThreads) {
 				delete this.threads[reference];
 			} else {
-				this.threads[reference].callStack = [];
-				this.threads[reference].stoppedReason = undefined;
+				this.threads[reference].clearCallStack();
+				this.threads[reference].stoppedDetails = undefined;
 			}
 		} else {
 			if (removeThreads) {
@@ -367,14 +411,24 @@ export class Model extends ee.EventEmitter implements debug.IModel {
 			} else {
 				for (let ref in this.threads) {
 					if (this.threads.hasOwnProperty(ref)) {
-						this.threads[ref].callStack = [];
-						this.threads[ref].stoppedReason = undefined;
+						this.threads[ref].clearCallStack();
+						this.threads[ref].stoppedDetails = undefined;
 					}
 				}
 			}
 		}
 
 		this.emit(debug.ModelEvents.CALLSTACK_UPDATED);
+	}
+
+	public continueThreads(): void {
+		for (let ref in this.threads) {
+			if (this.threads.hasOwnProperty(ref)) {
+				this.threads[ref].stopped = false;
+			}
+		}
+
+		this.clearThreads(false);
 	}
 
 	public getBreakpoints(): debug.IBreakpoint[] {
@@ -389,6 +443,15 @@ export class Model extends ee.EventEmitter implements debug.IModel {
 		return this.exceptionBreakpoints;
 	}
 
+	public setExceptionBreakpoints(data: DebugProtocol.ExceptionBreakpointsFilter[]): void {
+		if (data) {
+			this.exceptionBreakpoints = data.map(d => {
+				const ebp = this.exceptionBreakpoints.filter(ebp => ebp.filter === d.filter).pop();
+				return new ExceptionBreakpoint(d.filter, d.label, ebp ? ebp.enabled : d.default);
+			});
+		}
+	}
+
 	public areBreakpointsActivated(): boolean {
 		return this.breakpointsActivated;
 	}
@@ -399,7 +462,8 @@ export class Model extends ee.EventEmitter implements debug.IModel {
 	}
 
 	public addBreakpoints(rawData: debug.IRawBreakpoint[]): void {
-		this.breakpoints = this.breakpoints.concat(rawData.map(rawBp => new Breakpoint(new Source(Source.toRawSource(rawBp.uri, this)), rawBp.lineNumber, rawBp.enabled, rawBp.condition)));
+		this.breakpoints = this.breakpoints.concat(rawData.map(rawBp =>
+			new Breakpoint(new Source(Source.toRawSource(rawBp.uri, this)), rawBp.lineNumber, rawBp.enabled, rawBp.condition)));
 		this.breakpointsActivated = true;
 		this.emit(debug.ModelEvents.BREAKPOINTS_UPDATED);
 	}
@@ -476,7 +540,7 @@ export class Model extends ee.EventEmitter implements debug.IModel {
 
 	public addReplExpression(session: debug.IRawDebugSession, stackFrame: debug.IStackFrame, name: string): TPromise<void> {
 		const expression = new Expression(name, true);
-		this.replElements.push(expression);
+		this.addReplElements([expression]);
 		return evaluateExpression(session, stackFrame, expression, 'repl').then(() =>
 			this.emit(debug.ModelEvents.REPL_ELEMENTS_UPDATED, expression)
 		);
@@ -506,7 +570,7 @@ export class Model extends ee.EventEmitter implements debug.IModel {
 		}
 
 		if (elements.length) {
-			this.replElements.push(...elements);
+			this.addReplElements(elements);
 			this.emit(debug.ModelEvents.REPL_ELEMENTS_UPDATED, elements);
 		}
 	}
@@ -530,13 +594,22 @@ export class Model extends ee.EventEmitter implements debug.IModel {
 			elements.push(new ValueOutputElement(line, severity, 'output'));
 		});
 
-		this.replElements.push(...elements);
+		this.addReplElements(elements);
 		this.emit(debug.ModelEvents.REPL_ELEMENTS_UPDATED, elements);
 	}
 
+	private addReplElements(newElements: debug.ITreeElement[]): void {
+		this.replElements.push(...newElements);
+		if (this.replElements.length > MAX_REPL_LENGTH) {
+			this.replElements.splice(0, this.replElements.length - MAX_REPL_LENGTH);
+		}
+	}
+
 	public clearReplExpressions(): void {
-		this.replElements = [];
-		this.emit(debug.ModelEvents.REPL_ELEMENTS_UPDATED);
+		if (this.replElements.length > 0) {
+			this.replElements = [];
+			this.emit(debug.ModelEvents.REPL_ELEMENTS_UPDATED);
+		}
 	}
 
 	public getWatchExpressions(): Expression[] {
@@ -600,11 +673,13 @@ export class Model extends ee.EventEmitter implements debug.IModel {
 
 	public sourceIsUnavailable(source: Source): void {
 		Object.keys(this.threads).forEach(key => {
-			this.threads[key].callStack.forEach(stackFrame => {
-				if (stackFrame.source.uri.toString() === source.uri.toString()) {
-					stackFrame.source.available = false;
-				}
-			});
+			if (this.threads[key].getCachedCallStack()) {
+				this.threads[key].getCachedCallStack().forEach(stackFrame => {
+					if (stackFrame.source.uri.toString() === source.uri.toString()) {
+						stackFrame.source.available = false;
+					}
+				});
+			}
 		});
 
 		this.emit(debug.ModelEvents.CALLSTACK_UPDATED);
@@ -612,21 +687,28 @@ export class Model extends ee.EventEmitter implements debug.IModel {
 
 	public rawUpdate(data: debug.IRawModelUpdate): void {
 		if (data.thread) {
-			this.threads[data.threadId] = new Thread(data.thread.name, data.thread.id, []);
+			this.threads[data.threadId] = new Thread(data.thread.name, data.thread.id);
 		}
 
-		if (data.callStack) {
-			// convert raw call stack into proper modelled call stack
-			this.threads[data.threadId].callStack = data.callStack.map(
-				(rsf, level) => {
-					if (!rsf) {
-						return new StackFrame(data.threadId, 0, new Source({ name: 'unknown' }), nls.localize('unknownStack', "Unknown stack location"), undefined, undefined);
+		if (data.stoppedDetails) {
+			// Set the availability of the threads' callstacks depending on
+			// whether the thread is stopped or not
+			for (let ref in this.threads) {
+				if (this.threads.hasOwnProperty(ref)) {
+					if (data.allThreadsStopped) {
+						// Only update the details if all the threads are stopped
+						// because we don't want to overwrite the details of other
+						// threads that have stopped for a different reason
+						this.threads[ref].stoppedDetails = data.stoppedDetails;
 					}
 
-					return new StackFrame(data.threadId, rsf.id, rsf.source ? new Source(rsf.source) : new Source({ name: 'unknown' }), rsf.name, rsf.line, rsf.column);
-				});
+					this.threads[ref].stopped = data.allThreadsStopped;
+					this.threads[ref].clearCallStack();
+				}
+			}
 
-			this.threads[data.threadId].stoppedReason = data.stoppedReason;
+			this.threads[data.threadId].stoppedDetails = data.stoppedDetails;
+			this.threads[data.threadId].stopped = true;
 		}
 
 		this.emit(debug.ModelEvents.CALLSTACK_UPDATED);

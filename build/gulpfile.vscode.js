@@ -3,11 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-/*global process,__dirname, Buffer*/
-
 var gulp = require('gulp');
 var fs = require('fs');
 var path = require('path');
+var os = require('os');
 var es = require('event-stream');
 var azure = require('gulp-azure-storage');
 var electron = require('gulp-atom-electron');
@@ -16,16 +15,14 @@ var rename = require('gulp-rename');
 var replace = require('gulp-replace');
 var filter = require('gulp-filter');
 var json = require('gulp-json-editor');
-var insert = require('gulp-insert');
 var remote = require('gulp-remote-src');
 var shell = require("gulp-shell");
-var File = require('vinyl');
-var rimraf = require('rimraf');
 var _ = require('underscore');
 var packageJson = require('../package.json');
 var util = require('./lib/util');
 var buildfile = require('../src/buildfile');
 var common = require('./gulpfile.common');
+var nlsDev = require('vscode-nls-dev');
 var root = path.dirname(__dirname);
 var build = path.join(root, '.build');
 var commit = util.getVersion(root);
@@ -39,10 +36,6 @@ var baseModules = [
 ];
 
 // Build
-
-var builtInExtensions = {
-	'ms-vscode.omnisharp': '0.3.2',
-};
 
 var vscodeEntryPoints = _.flatten([
 	buildfile.entrypoint('vs/workbench/workbench.main'),
@@ -62,8 +55,6 @@ var vscodeResources = [
 	'out-build/vs/base/worker/workerMainCompatibility.html',
 	'out-build/vs/base/worker/workerMain.{js,js.map}',
 	'out-build/vs/base/browser/ui/octiconLabel/octicons/**',
-	'out-build/vs/editor/css/*.css',
-	'out-build/vs/languages/typescript/common/lib/lib.{d.ts,es6.d.ts}',
 	'out-build/vs/languages/markdown/common/*.css',
 	'out-build/vs/workbench/browser/media/*-theme.css',
 	'out-build/vs/workbench/electron-browser/index.html',
@@ -85,7 +76,7 @@ var BUNDLED_FILE_HEADER = [
 ].join('\n');
 
 gulp.task('clean-optimized-vscode', util.rimraf('out-vscode'));
-gulp.task('optimize-vscode', ['clean-optimized-vscode', 'compile-build', 'compile-plugins'], common.optimizeTask({
+gulp.task('optimize-vscode', ['clean-optimized-vscode', 'compile-build', 'compile-extensions-build'], common.optimizeTask({
 	entryPoints: vscodeEntryPoints,
 	otherSources: [],
 	resources: vscodeResources,
@@ -113,7 +104,7 @@ var config = {
 		name: product.nameLong + ' document',
 		role: 'Editor',
 		ostypes: ["TEXT", "utxt", "TUTX", "****"],
-		extensions: ["ascx", "asp", "aspx", "bash", "bash_login", "bash_logout", "bash_profile", "bashrc", "bat", "bowerrc", "c", "cc", "clj", "cljs", "cljx", "clojure", "cmd", "coffee", "config", "cpp", "cs", "cshtml", "csproj", "css", "csx", "ctp", "cxx", "dockerfile", "dot", "dtd", "editorconfig", "edn", "eyaml", "eyml", "fs", "fsi", "fsscript", "fsx", "gemspec", "gitattributes", "gitconfig", "gitignore", "go", "h", "handlebars", "hbs", "hh", "hpp", "htm", "html", "hxx", "ini", "jade", "jav", "java", "js", "jscsrc", "jshintrc", "jshtm", "json", "jsp", "less", "lua", "m", "makefile", "markdown", "md", "mdoc", "mdown", "mdtext", "mdtxt", "mdwn", "mkd", "mkdn", "ml", "mli", "nqp", "p6", "php", "phtml", "pl", "pl6", "pm", "pm6", "pod", "pp", "profile", "properties", "ps1", "psd1", "psgi", "psm1", "py", "r", "rb", "rhistory", "rprofile", "rs", "rt", "scss", "sh", "shtml", "sql", "svg", "svgz", "t", "ts", "txt", "vb", "wxi", "wxl", "wxs", "xaml", "xml", "yaml", "yml", "zsh"],
+		extensions: ["ascx", "asp", "aspx", "bash", "bash_login", "bash_logout", "bash_profile", "bashrc", "bat", "bowerrc", "c", "cc", "clj", "cljs", "cljx", "clojure", "cmd", "coffee", "config", "cpp", "cs", "cshtml", "csproj", "css", "csx", "ctp", "cxx", "dockerfile", "dot", "dtd", "editorconfig", "edn", "eyaml", "eyml", "fs", "fsi", "fsscript", "fsx", "gemspec", "gitattributes", "gitconfig", "gitignore", "go", "h", "handlebars", "hbs", "hh", "hpp", "htm", "html", "hxx", "ini", "jade", "jav", "java", "js", "jscsrc", "jshintrc", "jshtm", "json", "jsp", "less", "lua", "m", "makefile", "markdown", "md", "mdoc", "mdown", "mdtext", "mdtxt", "mdwn", "mkd", "mkdn", "ml", "mli", "nqp", "p6", "php", "phtml", "pl", "pl6", "pm", "pm6", "pod", "pp", "profile", "properties", "ps1", "psd1", "psgi", "psm1", "py", "r", "rb", "rhistory", "rprofile", "rs", "rt", "scss", "sh", "shtml", "sql", "svg", "svgz", "t", "ts", "txt", "vb", "wxi", "wxl", "wxs", "xaml", "xml", "yaml", "yml", "zlogin", "zlogout", "zprofile", "zsh", "zshenv", "zshrc"],
 		iconFile: 'resources/darwin/code_file.icns'
 	}],
 	darwinCredits: darwinCreditsTemplate ? new Buffer(darwinCreditsTemplate({ commit: commit, date: new Date().toISOString() })) : void 0,
@@ -151,6 +142,7 @@ function mixinProduct() {
 		date: new Date().toISOString()
 	}));
 }
+var languages = ['chs', 'cht', 'jpn', 'kor', 'deu', 'fra', 'esn', 'rus', 'ita'];
 
 function packageTask(platform, arch, opts) {
 	opts = opts || {};
@@ -161,12 +153,8 @@ function packageTask(platform, arch, opts) {
 
 	return function () {
 		var out = opts.minified ? 'out-vscode-min' : 'out-vscode';
-		var pluginHostFilter = filter(out + '/vs/workbench/node/pluginHostProcess.js', { restore: true });
 
 		var src = gulp.src(out + '/**', { base: '.' })
-			.pipe(pluginHostFilter)
-			.pipe(insert.append('\n//# sourceMappingURL=pluginHostProcess.js.map'))
-			.pipe(pluginHostFilter.restore)
 			.pipe(rename(function (path) { path.dirname = path.dirname.replace(new RegExp('^' + out), 'out'); }))
 			.pipe(util.setExecutableBit(['**/*.sh']));
 
@@ -180,18 +168,13 @@ function packageTask(platform, arch, opts) {
 			'!extensions/json/server/src/**',
 			'!extensions/json/server/out/**/test/**',
 			'!extensions/json/server/test/**',
-			'!extensions/json/server/typings/**',
-			'!extensions/json/server/node_modules/typescript/**',
-			'!extensions/json/server/node_modules/mocha/**'
+			'!extensions/json/server/typings/**'
 		], { base: '.' });
 
-		var pluginHostSourceMap = gulp.src(out + '/vs/workbench/node/pluginHostProcess.js.map', { base: '.' })
-			.pipe(rename(function (path) { path.dirname = path.dirname.replace(new RegExp('^' + out), 'out'); }));
-
-		var sources = es.merge(
-			es.merge(src, extensions).pipe(filter(['**', '!**/*.js.map'])),
-			pluginHostSourceMap
-		).pipe(util.handleAzureJson({ platform: platform }));
+		var sources = es.merge(src, extensions)
+			.pipe(nlsDev.createAdditionalLanguageFiles(languages, path.join(__dirname, '..', 'i18n')))
+			.pipe(filter(['**', '!**/*.js.map']))
+			.pipe(util.handleAzureJson({ platform: platform }));
 
 		var version = packageJson.version;
 		var quality = product.quality;
@@ -219,19 +202,13 @@ function packageTask(platform, arch, opts) {
 			.pipe(util.cleanNodeModule('native-keymap', ['binding.gyp', 'build/**', 'src/**', 'deps/**'], true))
 			.pipe(util.cleanNodeModule('weak', ['binding.gyp', 'build/**', 'src/**'], true));
 
-		var extraExtensions = util.downloadExtensions(builtInExtensions)
-			.pipe(rename(function (p) {
-				p.dirname = path.posix.join('extensions', p.dirname);
-			}));
-
 		var all = es.merge(
 			api,
 			packageJsonStream,
 			mixinProduct(),
 			license,
 			sources,
-			deps,
-			extraExtensions
+			deps
 		);
 
 		if (platform === 'win32') {
@@ -252,12 +229,15 @@ function packageTask(platform, arch, opts) {
 			.pipe(filter(['**', '!LICENSE', '!LICENSES.chromium.html', '!version']));
 
 		if (platform === 'win32') {
-			var shortcutFilter = filter('bin/*.cmd', { restore: true });
+			result = es.merge(result, gulp.src('resources/win32/bin/code.js', { base: 'resources/win32' }));
 
-			result = es.merge(result, gulp.src('resources/win32/bin/**', { base: 'resources/win32' }))
-				.pipe(shortcutFilter)
-				.pipe(rename(function (f) { f.basename = product.applicationName; }))
-				.pipe(shortcutFilter.restore);
+			result = es.merge(result, gulp.src('resources/win32/bin/code.cmd', { base: 'resources/win32' })
+				.pipe(replace('@@NAME@@', product.nameShort))
+				.pipe(rename(function (f) { f.basename = product.applicationName; })));
+
+			result = es.merge(result, gulp.src('resources/win32/bin/code.sh', { base: 'resources/win32' })
+				.pipe(replace('@@NAME@@', product.nameShort))
+				.pipe(rename(function (f) { f.basename = product.applicationName; f.extname = ''; })));
 		}
 
 		return result.pipe(symdest(destination));
@@ -268,23 +248,27 @@ function getDebPackageArch(arch) {
 	return { x64: 'amd64', ia32: 'i386' }[arch];
 }
 
+function getEpochTime() {
+	return Math.floor(new Date().getTime() / 1000);
+}
+
 function prepareDebPackage(arch) {
 	var binaryDir = '../VSCode-linux-' + arch;
 	var debArch = getDebPackageArch(arch);
-	var destination = '.build/linux/vscode-' + debArch;
-	var packageRevision = '1';
+	var destination = '.build/linux/deb/' + debArch + '/vscode-' + debArch;
+	var packageRevision = getEpochTime();
 
 	return function () {
-		var shortcut = gulp.src('resources/linux/bin/code.sh')
+		var shortcut = gulp.src('resources/linux/bin/code.sh', { base: '.' })
 			.pipe(replace('@@NAME@@', product.applicationName))
 			.pipe(rename('usr/bin/' + product.applicationName));
 
-		var desktop = gulp.src('resources/linux/debian/code.desktop')
+		var desktop = gulp.src('resources/linux/code.desktop', { base: '.' })
 			.pipe(replace('@@NAME_LONG@@', product.nameLong))
 			.pipe(replace('@@NAME@@', product.applicationName))
 			.pipe(rename('usr/share/applications/' + product.applicationName + '.desktop'));
 
-		var icon = gulp.src('resources/linux/code.png')
+		var icon = gulp.src('resources/linux/code.png', { base: '.' })
 			.pipe(rename('usr/share/pixmaps/' + product.applicationName + '.png'));
 
 		var code = gulp.src(binaryDir + '/**/*', { base: binaryDir })
@@ -304,13 +288,95 @@ function prepareDebPackage(arch) {
 					.pipe(es.through(function (f) { that.emit('data', f); }, function () { that.emit('end'); }));
 			}));
 
-		return es.merge(control, desktop, icon, shortcut, code)
-			.pipe(symdest(destination));
+		var prerm = gulp.src('resources/linux/debian/prerm.template', { base: '.' })
+			.pipe(replace('@@NAME@@', product.applicationName))
+			.pipe(rename('DEBIAN/prerm'))
+
+		var all = es.merge(control, prerm, desktop, icon, shortcut, code);
+
+		// Register an apt repository if this is an official build
+		if (product.updateUrl && product.quality) {
+			var postinst = gulp.src('resources/linux/debian/postinst.template', { base: '.' })
+				.pipe(replace('@@NAME@@', product.applicationName))
+				.pipe(replace('@@UPDATEURL@@', product.updateUrl))
+				.pipe(replace('@@QUALITY@@', product.quality))
+				.pipe(replace('@@ARCHITECTURE@@', debArch))
+				.pipe(rename('DEBIAN/postinst'))
+			all = es.merge(all, postinst);
+		} else {
+			var postinst = gulp.src('resources/linux/debian/postinst.oss.template', { base: '.' })
+				.pipe(replace('@@NAME@@', product.applicationName))
+				.pipe(rename('DEBIAN/postinst'))
+			all = es.merge(all, postinst);
+		}
+
+		return all.pipe(symdest(destination));
 	};
 }
 
 function buildDebPackage(arch) {
-	return shell.task(['fakeroot dpkg-deb -b .build/linux/vscode-' + getDebPackageArch(arch)]);
+	var debArch = getDebPackageArch(arch);
+	return shell.task([
+		'mkdir -p deb',
+		'fakeroot dpkg-deb -b vscode-' + debArch + ' deb/vscode-' + debArch + '.deb',
+		'dpkg-scanpackages deb /dev/null > Packages'
+	], { cwd: '.build/linux/deb/' + debArch});
+}
+
+function getHomeDir() {
+	if (typeof os.homedir === 'function') {
+		return os.homedir();
+	}
+	return process.env[(process.platform == 'win32') ? 'USERPROFILE' : 'HOME'];
+}
+
+var rpmBuildPath = path.join(getHomeDir(), 'rpmbuild');
+
+function getRpmPackageArch(arch) {
+	return { x64: 'x86_64', ia32: 'i386' }[arch];
+}
+
+function prepareRpmPackage(arch) {
+	var binaryDir = '../VSCode-linux-' + arch;
+	var destination = rpmBuildPath;
+	var packageRevision = getEpochTime();
+
+	return function () {
+		var shortcut = gulp.src('resources/linux/bin/code.sh', { base: '.' })
+			.pipe(replace('@@NAME@@', product.applicationName))
+			.pipe(rename('BUILD/usr/bin/' + product.applicationName));
+
+		var desktop = gulp.src('resources/linux/code.desktop', { base: '.' })
+			.pipe(replace('@@NAME_LONG@@', product.nameLong))
+			.pipe(replace('@@NAME@@', product.applicationName))
+			.pipe(rename('BUILD/usr/share/applications/' + product.applicationName + '.desktop'));
+
+		var icon = gulp.src('resources/linux/code.png', { base: '.' })
+			.pipe(rename('BUILD/usr/share/pixmaps/' + product.applicationName + '.png'));
+
+		var code = gulp.src(binaryDir + '/**/*', { base: binaryDir })
+			.pipe(rename(function (p) { p.dirname = 'BUILD/usr/share/' + product.applicationName + '/' + p.dirname; }));
+
+		var spec = gulp.src('resources/linux/rpm/code.spec.template', { base: '.' })
+			.pipe(replace('@@NAME@@', product.applicationName))
+			.pipe(replace('@@VERSION@@', packageJson.version))
+			.pipe(replace('@@RELEASE@@', packageRevision))
+			.pipe(rename('SPECS/' + product.applicationName + '.spec'));
+
+		var specIcon = gulp.src('resources/linux/rpm/code.xpm', { base: '.' })
+			.pipe(rename('SOURCES/' + product.applicationName + '.xpm'));
+
+		var all = es.merge(code, desktop, icon, shortcut, spec, specIcon);
+
+		return all.pipe(symdest(destination));
+	}
+}
+
+function buildRpmPackage(arch) {
+	var rpmArch = getRpmPackageArch(arch);
+	return shell.task([
+		'fakeroot rpmbuild -bb ' + rpmBuildPath + '/SPECS/' + product.applicationName + '.spec --target=' + rpmArch,
+	]);
 }
 
 gulp.task('clean-vscode-win32', util.rimraf(path.join(path.dirname(root), 'VSCode-win32')));
@@ -318,8 +384,11 @@ gulp.task('clean-vscode-darwin', util.rimraf(path.join(path.dirname(root), 'VSCo
 gulp.task('clean-vscode-linux-ia32', util.rimraf(path.join(path.dirname(root), 'VSCode-linux-ia32')));
 gulp.task('clean-vscode-linux-x64', util.rimraf(path.join(path.dirname(root), 'VSCode-linux-x64')));
 gulp.task('clean-vscode-linux-arm', util.rimraf(path.join(path.dirname(root), 'VSCode-linux-arm')));
-gulp.task('clean-vscode-linux-ia32-deb', util.rimraf('.build/linux/vscode-i386*'));
-gulp.task('clean-vscode-linux-x64-deb', util.rimraf('.build/linux/vscode-amd64*'));
+gulp.task('clean-vscode-linux-ia32-deb', util.rimraf('.build/linux/deb/i386'));
+gulp.task('clean-vscode-linux-x64-deb', util.rimraf('.build/linux/deb/amd64'));
+gulp.task('clean-vscode-linux-ia32-rpm', util.rimraf('.build/linux/rpm/i386'));
+gulp.task('clean-vscode-linux-x64-rpm', util.rimraf('.build/linux/rpm/x86_64'));
+gulp.task('clean-rpmbuild', util.rimraf(rpmBuildPath));
 
 gulp.task('vscode-win32', ['optimize-vscode', 'clean-vscode-win32'], packageTask('win32'));
 gulp.task('vscode-darwin', ['optimize-vscode', 'clean-vscode-darwin'], packageTask('darwin'));
@@ -337,7 +406,11 @@ gulp.task('vscode-linux-ia32-prepare-deb', ['clean-vscode-linux-ia32-deb', 'vsco
 gulp.task('vscode-linux-x64-prepare-deb', ['clean-vscode-linux-x64-deb', 'vscode-linux-x64-min'], prepareDebPackage('x64'));
 gulp.task('vscode-linux-ia32-build-deb', ['vscode-linux-ia32-prepare-deb'], buildDebPackage('ia32'));
 gulp.task('vscode-linux-x64-build-deb', ['vscode-linux-x64-prepare-deb'], buildDebPackage('x64'));
-gulp.task('vscode-linux-packages', ['vscode-linux-ia32-build-deb', 'vscode-linux-x64-build-deb']);
+
+gulp.task('vscode-linux-ia32-prepare-rpm', ['clean-rpmbuild', 'clean-vscode-linux-ia32-rpm', 'vscode-linux-ia32-min'], prepareRpmPackage('ia32'));
+gulp.task('vscode-linux-x64-prepare-rpm', ['clean-rpmbuild', 'clean-vscode-linux-x64-rpm', 'vscode-linux-x64-min'], prepareRpmPackage('x64'));
+gulp.task('vscode-linux-ia32-build-rpm', ['vscode-linux-ia32-prepare-rpm'], buildRpmPackage('ia32'));
+gulp.task('vscode-linux-x64-build-rpm', ['vscode-linux-x64-prepare-rpm'], buildRpmPackage('x64'));
 
 // Sourcemaps
 

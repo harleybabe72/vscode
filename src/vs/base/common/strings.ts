@@ -66,13 +66,6 @@ export function escapeRegExpCharacters(value: string): string {
 }
 
 /**
- * Searches for all occurrences of needle in haystack and replaces them with replacement.
- */
-export function replaceAll(haystack: string, needle: string, replacement: string): string {
-	return haystack.replace(new RegExp(escapeRegExpCharacters(needle.toString()), 'g'), replacement);
-}
-
-/**
  * Removes all occurrences of needle from the beginning and end of haystack.
  * @param haystack string to trim
  * @param needle the thing to trim (default is a blank)
@@ -145,7 +138,7 @@ export function convertSimple2RegExpPattern(pattern: string): string {
 }
 
 export function stripWildcards(pattern: string): string {
-	return replaceAll(pattern, '*', '');
+	return pattern.replace(/\*/g, '');
 }
 
 /**
@@ -254,13 +247,16 @@ export function regExpLeadsToEndlessLoop(regexp: RegExp): boolean {
  */
 export let canNormalize = typeof ((<any>'').normalize) === 'function';
 const nonAsciiCharactersPattern = /[^\u0000-\u0080]/;
-export function normalizeNFC(str: string, cache?: { [str: string]: string }): string {
+const normalizedCache = Object.create(null);
+let cacheCounter = 0;
+export function normalizeNFC(str: string): string {
 	if (!canNormalize || !str) {
 		return str;
 	}
 
-	if (cache && cache[str]) {
-		return cache[str];
+	const cached = normalizedCache[str];
+	if (cached) {
+		return cached;
 	}
 
 	let res: string;
@@ -270,41 +266,13 @@ export function normalizeNFC(str: string, cache?: { [str: string]: string }): st
 		res = str;
 	}
 
-	if (cache) {
-		cache[str] = res;
+	// Use the cache for fast lookup but do not let it grow unbounded
+	if (cacheCounter < 10000) {
+		normalizedCache[str] = res;
+		cacheCounter++;
 	}
 
 	return res;
-}
-
-export function isCamelCasePattern(pattern: string): boolean {
-	return (/^\w[\w.]*$/).test(pattern);
-}
-
-export function isFalsyOrWhitespace(s: string): boolean {
-	return !s || !s.trim();
-}
-
-export function anchorPattern(value: string, start: boolean, end: boolean): string {
-	if (start) {
-		value = '^' + value;
-	}
-
-	if (end) {
-		value = value + '$';
-	}
-
-	return value;
-}
-
-export function assertRegExp(pattern: string, modifiers: string): void {
-	if (regExpLeadsToEndlessLoop(new RegExp(pattern, modifiers))) {
-		throw new Error('Regular expression /' + pattern + '/g results in infinitive matches');
-	}
-}
-
-export function colorize(code: number, value: string): string {
-	return '\x1b[' + code + 'm' + value + '\x1b[0m';
 }
 
 /**
@@ -597,4 +565,22 @@ export const UTF8_BOM_CHARACTER = String.fromCharCode(__utf8_bom);
 
 export function startsWithUTF8BOM(str: string): boolean {
 	return (str && str.length > 0 && str.charCodeAt(0) === __utf8_bom);
+}
+
+/**
+ * Appends two strings. If the appended result is longer than maxLength,
+ * trims the start of the result and replaces it with '...'.
+ */
+export function appendWithLimit(first: string, second: string, maxLength: number): string {
+	const newLength = first.length + second.length;
+	if (newLength > maxLength) {
+		first = '...' + first.substr(newLength - maxLength);
+	}
+	if (second.length > maxLength) {
+		first += second.substr(second.length - maxLength);
+	} else {
+		first += second;
+	}
+
+	return first;
 }

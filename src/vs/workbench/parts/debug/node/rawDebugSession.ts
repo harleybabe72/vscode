@@ -8,15 +8,18 @@ import cp = require('child_process');
 import fs = require('fs');
 import net = require('net');
 import platform = require('vs/base/common/platform');
+import { Action } from 'vs/base/common/actions';
 import errors = require('vs/base/common/errors');
 import { TPromise } from 'vs/base/common/winjs.base';
 import severity from 'vs/base/common/severity';
+import { AIAdapter } from 'vs/base/node/aiAdapter';
 import debug = require('vs/workbench/parts/debug/common/debug');
 import { Adapter } from 'vs/workbench/parts/debug/node/debugAdapter';
 import v8 = require('vs/workbench/parts/debug/node/v8Protocol');
 import stdfork = require('vs/base/node/stdFork');
-import { IMessageService } from 'vs/platform/message/common/message';
+import { IMessageService, CloseAction } from 'vs/platform/message/common/message';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
+import { shell } from 'electron';
 
 export class RawDebugSession extends v8.V8Protocol implements debug.IRawDebugSession {
 	private serverProcess: cp.ChildProcess;
@@ -24,17 +27,21 @@ export class RawDebugSession extends v8.V8Protocol implements debug.IRawDebugSes
 	private cachedInitServer: TPromise<void>;
 	private startTime: number;
 	private stopServerPending: boolean;
+	private sentPromises: TPromise<DebugProtocol.Response>[];
 	public isAttach: boolean;
-	public capablities: DebugProtocol.Capabilites;
+	public restarted: boolean;
+	public capabilities: DebugProtocol.Capabilites;
 
 	constructor(
 		private messageService: IMessageService,
 		private telemetryService: ITelemetryService,
 		private debugServerPort: number,
-		private adapter: Adapter
+		private adapter: Adapter,
+		private telemtryAdapter: AIAdapter
 	) {
 		super();
-		this.capablities = {};
+		this.capabilities = {};
+		this.sentPromises = [];
 	}
 
 	private initServer(): TPromise<void> {
@@ -55,20 +62,34 @@ export class RawDebugSession extends v8.V8Protocol implements debug.IRawDebugSes
 	}
 
 	protected send(command: string, args: any): TPromise<DebugProtocol.Response> {
-		return this.initServer().then(() => super.send(command, args).then(response => response, (errorResponse: DebugProtocol.ErrorResponse) => {
-			const error = errorResponse.body ? errorResponse.body.error : null;
-			const message = error ? debug.formatPII(error.format, false, error.variables) : errorResponse.message;
-			if (error && error.sendTelemetry) {
-				this.telemetryService.publicLog('debugProtocolErrorResponse', { error : message });
-			}
+		return this.initServer().then(() => {
+			const promise = super.send(command, args).then(response => response, (errorResponse: DebugProtocol.ErrorResponse) => {
+				const error = errorResponse.body ? errorResponse.body.error : null;
+				const message = error ? debug.formatPII(error.format, false, error.variables) : errorResponse.message;
+				if (error && error.sendTelemetry) {
+					this.telemetryService.publicLog('debugProtocolErrorResponse', { error: message });
+					this.telemtryAdapter.log('debugProtocolErrorResponse', { error: message });
+				}
 
-			return TPromise.wrapError(new Error(message));
-		}));
+				if (error && error.url) {
+					const label = error.urlLabel ? error.urlLabel : nls.localize('moreInfo', "More Info");
+					return TPromise.wrapError(errors.create(message, { actions: [CloseAction, new Action('debug.moreInfo', label, null, true, () => {
+						shell.openExternal(error.url);
+						return TPromise.as(null);
+					})]}));
+				}
+
+				return TPromise.wrapError(new Error(message));
+			});
+
+			this.sentPromises.push(promise);
+			return promise;
+		});
 	}
 
 	public initialize(args: DebugProtocol.InitializeRequestArguments): TPromise<DebugProtocol.InitializeResponse> {
 		return this.send('initialize', args).then(response => {
-			this.capablities = response.body || this.capablities;
+			this.capabilities = response.body || this.capabilities;
 			return response;
 		});
 	}
@@ -123,10 +144,14 @@ export class RawDebugSession extends v8.V8Protocol implements debug.IRawDebugSes
 		if (this.stopServerPending && force) {
 			return this.stopServer();
 		}
+		// Cancel all sent promises on disconnect so debug trees are not left in a broken state #3666.
+		this.sentPromises.forEach(p => p.cancel());
+		this.sentPromises = [];
 
 		if ((this.serverProcess || this.socket) && !this.stopServerPending) {
 			// point of no return: from now on don't report any errors
 			this.stopServerPending = true;
+			this.restarted = restart;
 			return this.send('disconnect', { restart: restart }).then(() => this.stopServer(), () => this.stopServer());
 		}
 

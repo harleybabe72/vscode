@@ -3,8 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import 'vs/css!./media/extensions';
-
 import nls = require('vs/nls');
 import { IDisposable, disposeAll } from 'vs/base/common/lifecycle';
 import { TPromise } from 'vs/base/common/winjs.base';
@@ -18,16 +16,15 @@ import { QuickOpenHandler } from 'vs/workbench/browser/quickopen';
 import { IHighlight } from 'vs/base/parts/quickopen/browser/quickOpenModel';
 import { IExtensionsService, IGalleryService, IExtensionTipsService, IExtension } from 'vs/workbench/parts/extensions/common/extensions';
 import { InstallAction, UninstallAction } from 'vs/workbench/parts/extensions/electron-browser/extensionsActions';
-import { ILifecycleService } from 'vs/platform/lifecycle/common/lifecycle';
 import { IMessageService } from 'vs/platform/message/common/message';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { IWorkspaceContextService } from 'vs/workbench/services/workspace/common/contextService';
 import { HighlightedLabel } from 'vs/base/browser/ui/highlightedlabel/highlightedLabel';
 import { Action } from 'vs/base/common/actions';
-import * as semver from 'semver';
 import { ActionBar } from 'vs/base/browser/ui/actionbar/actionbar';
 import { shell } from 'electron';
+import { extensionEquals, getOutdatedExtensions } from 'vs/workbench/parts/extensions/common/extensionsUtil';
 
 const $ = dom.emmet;
 
@@ -35,6 +32,7 @@ const InstallLabel = nls.localize('install', "Install Extension");
 const UpdateLabel = nls.localize('update', "Update Extension");
 
 export interface IHighlights {
+	id: IHighlight[];
 	name: IHighlight[];
 	displayName: IHighlight[];
 	description: IHighlight[];
@@ -64,19 +62,16 @@ interface ITemplateData {
 }
 
 function getHighlights(input: string, extension: IExtension): IHighlights {
+	const id = matchesContiguousSubString(input, `${ extension.publisher }.${ extension.name }`) || [];
 	const name = matchesContiguousSubString(input, extension.name) || [];
 	const displayName = matchesContiguousSubString(input, extension.displayName) || [];
 	const description = matchesContiguousSubString(input, extension.description) || [];
 
-	if (!name.length && !displayName.length && !description.length) {
+	if (!id.length && !name.length && !displayName.length && !description.length) {
 		return null;
 	}
 
-	return { name, displayName, description };
-}
-
-function extensionEquals(one: IExtension, other: IExtension): boolean {
-	return one.publisher === other.publisher && one.name === other.name;
+	return { id, name, displayName, description };
 }
 
 function extensionEntryCompare(one: IExtensionEntry, other: IExtensionEntry): number {
@@ -91,6 +86,21 @@ function extensionEntryCompare(one: IExtensionEntry, other: IExtensionEntry): nu
 	return one.extension.displayName.localeCompare(other.extension.displayName);
 }
 
+class OpenLicenseAction extends Action {
+
+	constructor(
+		@IWorkspaceContextService private contextService: IWorkspaceContextService
+	) {
+		super('extensions.open-license', nls.localize('license', "License"), '', true);
+	}
+
+	public run(extension: IExtension): TPromise<any> {
+		const url = `${ this.contextService.getConfiguration().env.extensionsGallery.itemUrl }/${ extension.publisher }.${ extension.name }/license`;
+		shell.openExternal(url);
+		return TPromise.as(null);
+	}
+}
+
 class OpenInGalleryAction extends Action {
 
 	constructor(
@@ -99,7 +109,7 @@ class OpenInGalleryAction extends Action {
 		@IWorkspaceContextService private contextService: IWorkspaceContextService,
 		@IInstantiationService protected instantiationService: IInstantiationService
 	) {
-		super('extensions.open-in-gallery', 'Readme', '', true);
+		super('extensions.open-in-gallery', nls.localize('readme', "Readme"), '', true);
 	}
 
 	public run(extension: IExtension): TPromise<any> {
@@ -217,6 +227,7 @@ class Renderer implements IRenderer<IExtensionEntry> {
 
 			if (entry.extension.galleryInformation) {
 				data.actionbar.push(this.instantiationService.createInstance(OpenInGalleryAction, entry.state !== ExtensionState.Installed), { label: true, icon: false });
+				data.actionbar.push(this.instantiationService.createInstance(OpenLicenseAction), { label: true, icon: false });
 			}
 
 			switch (entry.state) {
@@ -246,7 +257,7 @@ class Renderer implements IRenderer<IExtensionEntry> {
 		updateActions();
 
 		data.disposables = disposeAll(data.disposables);
-		data.disposables.push(this.extensionsService.onDidInstallExtension(e => onExtensionStateChange(e, ExtensionState.Installed)));
+		data.disposables.push(this.extensionsService.onDidInstallExtension(e => onExtensionStateChange(e.extension, ExtensionState.Installed)));
 		data.disposables.push(this.extensionsService.onDidUninstallExtension(e => onExtensionStateChange(e, ExtensionState.Uninstalled)));
 
 		data.displayName.set(extension.displayName, entry.highlights.displayName);
@@ -322,7 +333,7 @@ class LocalExtensionsModel implements IModel<IExtensionEntry> {
 
 	public set input(input: string) {
 		this.entries = this.extensions
-			.map(extension => ({ extension, highlights: getHighlights(input, extension) }))
+			.map(extension => ({ extension, highlights: getHighlights(input.trim(), extension) }))
 			.filter(({ highlights }) => !!highlights)
 			.map(({ extension, highlights }) => ({
 				extension,
@@ -394,7 +405,7 @@ class GalleryExtensionsModel implements IModel<IExtensionEntry> {
 
 	public set input(input: string) {
 		this.entries = this.galleryExtensions
-			.map(extension => ({ extension, highlights: getHighlights(input, extension) }))
+			.map(extension => ({ extension, highlights: getHighlights(input.trim(), extension) }))
 			.filter(({ highlights }) => !!highlights)
 			.map(({ extension, highlights }: { extension: IExtension, highlights: IHighlights }) => {
 				const local = this.localExtensions.filter(local => extensionEquals(local, extension))[0];
@@ -463,8 +474,7 @@ class OutdatedExtensionsModel implements IModel<IExtensionEntry> {
 	public entries: IExtensionEntry[];
 
 	constructor(
-		private galleryExtensions: IExtension[],
-		private localExtensions: IExtension[],
+		private outdatedExtensions: IExtension[],
 		@IInstantiationService instantiationService: IInstantiationService
 	) {
 		this.renderer = instantiationService.createInstance(Renderer);
@@ -473,12 +483,9 @@ class OutdatedExtensionsModel implements IModel<IExtensionEntry> {
 	}
 
 	public set input(input: string) {
-		this.entries = this.galleryExtensions
-			.map(extension => ({ extension, highlights: getHighlights(input, extension) }))
-			.filter(({ extension, highlights }) => {
-				const local = this.localExtensions.filter(local => extensionEquals(local, extension))[0];
-				return local && semver.lt(local.version, extension.version) && !!highlights;
-			})
+		this.entries = this.outdatedExtensions
+			.map(extension => ({ extension, highlights: getHighlights(input.trim(), extension) }))
+			.filter(({ highlights }) => !!highlights)
 			.map(({ extension, highlights }: { extension: IExtension, highlights: IHighlights }) => ({
 				extension,
 				highlights,
@@ -508,8 +515,8 @@ export class OutdatedExtensionsHandler extends QuickOpenHandler {
 	getResults(input: string): TPromise<IModel<IExtensionEntry>> {
 		if (!this.modelPromise) {
 			this.telemetryService.publicLog('extensionGallery:open');
-			this.modelPromise = TPromise.join<any>([this.galleryService.query(), this.extensionsService.getInstalled()])
-				.then(result => this.instantiationService.createInstance(OutdatedExtensionsModel, result[0], result[1]));
+			this.modelPromise = this.instantiationService.invokeFunction(getOutdatedExtensions)
+				.then(outdated => this.instantiationService.createInstance(OutdatedExtensionsModel, outdated));
 		}
 
 		return this.modelPromise.then(model => {
@@ -541,6 +548,7 @@ class SuggestedExtensionsModel implements IModel<IExtensionEntry> {
 
 	constructor(
 		private suggestedExtensions: IExtension[],
+		private localExtensions: IExtension[],
 		@IInstantiationService instantiationService: IInstantiationService
 	) {
 		this.renderer = instantiationService.createInstance(Renderer);
@@ -550,60 +558,55 @@ class SuggestedExtensionsModel implements IModel<IExtensionEntry> {
 
 	public set input(input: string) {
 		this.entries = this.suggestedExtensions
-			.map(extension => ({ extension, highlights: getHighlights(input, extension) }))
-			.filter(({ highlights }) => !!highlights)
+			.map(extension => ({ extension, highlights: getHighlights(input.trim(), extension) }))
+			.filter(({ extension, highlights }) => {
+				const local = this.localExtensions.filter(local => extensionEquals(local, extension))[0];
+				return !local && !!highlights;
+			})
 			.map(({ extension, highlights }: { extension: IExtension, highlights: IHighlights }) => {
-
 				return {
 					extension,
 					highlights,
 					state: ExtensionState.Uninstalled
 				};
-			});
+			})
+			.sort(extensionEntryCompare);
 	}
 }
 
 
 export class SuggestedExtensionHandler extends QuickOpenHandler {
 
-	private model: SuggestedExtensionsModel;
+	private modelPromise: TPromise<SuggestedExtensionsModel>;
 
 	constructor(
 		@IExtensionTipsService private extensionTipsService: IExtensionTipsService,
 		@IInstantiationService private instantiationService: IInstantiationService,
 		@ITelemetryService private telemetryService: ITelemetryService,
-		@IExtensionsService extensionService: IExtensionsService,
-		@ILifecycleService lifecycleService:ILifecycleService
+		@IExtensionsService private extensionsService: IExtensionsService
 	) {
 		super();
-
-		const subscription = extensionService.onInstallExtension(manifest => {
-			if (this.model) { // indicates that tips currently show
-				this.telemetryService.publicLog('extensionGallery:tips', { installed: true });
-			}
-		});
-
-		lifecycleService.onShutdown(() => subscription.dispose());
 	}
 
 	getResults(input: string): TPromise<IModel<IExtensionEntry>> {
-		if (!this.model) {
-			const {tips} = this.extensionTipsService;
-			this.telemetryService.publicLog('extensionGallery:tips', { count: tips.length });
-			this.model = this.instantiationService.createInstance(
-				SuggestedExtensionsModel,
-				tips);
+		if (!this.modelPromise) {
+			this.telemetryService.publicLog('extensionRecommendations:open');
+			this.modelPromise = TPromise.join<any>([this.extensionTipsService.getRecommendations(), this.extensionsService.getInstalled()])
+				.then(result => this.instantiationService.createInstance(SuggestedExtensionsModel, result[0], result[1]));
 		}
-		this.model.input = input;
-		return TPromise.as(this.model);
+
+		return this.modelPromise.then(model => {
+			model.input = input;
+			return model;
+		});
 	}
 
 	onClose(canceled: boolean): void {
-		this.model = null;
+		this.modelPromise = null;
 	}
 
 	getEmptyLabel(input: string): string {
-		return nls.localize('noSuggestedExtensions', "No suggested extensions");
+		return nls.localize('noRecommendedExtensions', "No recommended extensions");
 	}
 
 	getAutoFocus(searchValue: string): IAutoFocus {

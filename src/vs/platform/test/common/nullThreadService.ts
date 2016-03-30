@@ -15,7 +15,7 @@ export class NullThreadService extends abstractThreadService.AbstractThreadServi
 
 	constructor() {
 		super(true);
-		this.setInstantiationService(instantiationService.create({
+		this.setInstantiationService(instantiationService.createInstantiationService({
 			threadService: this
 		}));
 	}
@@ -24,24 +24,12 @@ export class NullThreadService extends abstractThreadService.AbstractThreadServi
 		return super._doCreateInstance(params);
 	}
 
-	MainThread(obj: IThreadSynchronizableObject<any>, methodName: string, target: Function, params: any[]): winjs.Promise {
-		return target.apply(obj, params);
-	}
-
-	OneWorker(obj: IThreadSynchronizableObject<any>, methodName: string, target: Function, params: any[], affinity: ThreadAffinity): winjs.Promise {
+	OneWorker(obj: IThreadSynchronizableObject, methodName: string, target: Function, params: any[], affinity: ThreadAffinity): winjs.Promise {
 		return winjs.TPromise.as(null);
 	}
 
-	AllWorkers(obj: IThreadSynchronizableObject<any>, methodName: string, target: Function, params: any[]): winjs.Promise {
+	AllWorkers(obj: IThreadSynchronizableObject, methodName: string, target: Function, params: any[]): winjs.Promise {
 		return winjs.TPromise.as(null);
-	}
-
-	Everywhere(obj: IThreadSynchronizableObject<any>, methodName: string, target: Function, params: any[]): any {
-		return target.apply(obj, params);
-	}
-
-	ensureWorkers(): void {
-		// Nothing to do
 	}
 
 	addStatusListener(listener: IThreadServiceStatusListener): void {
@@ -60,11 +48,11 @@ export class NullThreadService extends abstractThreadService.AbstractThreadServi
 		this._registerLocalInstance(id, actor);
 	}
 
-	protected _registerAndInstantiatePluginHostActor<T>(id: string, descriptor: SyncDescriptor0<T>): T {
+	protected _registerAndInstantiateExtHostActor<T>(id: string, descriptor: SyncDescriptor0<T>): T {
 		return this._getOrCreateLocalInstance(id, descriptor);
 	}
 
-	protected _registerPluginHostActor<T>(id: string, actor: T): void {
+	protected _registerExtHostActor<T>(id: string, actor: T): void {
 		throw new Error('Not supported in this runtime context!');
 	}
 

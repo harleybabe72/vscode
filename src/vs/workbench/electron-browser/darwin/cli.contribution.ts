@@ -22,8 +22,17 @@ import { IMessageService, Severity } from 'vs/platform/message/common/message';
 import { IEditorService } from 'vs/platform/editor/common/editor';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 
+interface ILegacyUse {
+	file: string;
+	lineNumber: number;
+}
+
 function ignore<T>(code: string, value: T = null): (err: any) => TPromise<T> {
 	return err => err.code === code ? TPromise.as<T>(value) : TPromise.wrapError<T>(err);
+}
+
+function readOrEmpty(name: string): TPromise<string> {
+	return pfs.readFile(name, 'utf8').then(null, ignore('ENOENT', ''));
 }
 
 const root = URI.parse(require.toUrl('')).fsPath;
@@ -33,7 +42,7 @@ const isAvailable = fs.existsSync(source);
 class InstallAction extends Action {
 
 	static ID = 'workbench.action.installCommandLine';
-	static LABEL = nls.localize('install', 'Install in PATH');
+	static LABEL = nls.localize('install', "Install 'code' command in PATH");
 
 	constructor(
 		id: string,
@@ -55,11 +64,12 @@ class InstallAction extends Action {
 
 	run(): TPromise<void> {
 		return this.checkLegacy()
-			.then(files => {
-				if (files.length > 0) {
-					const file = files[0];
+			.then(uses => {
+				if (uses.length > 0) {
+					const { file, lineNumber } = uses[0];
 					const resource = URI.create('file', null, file);
-					const message = nls.localize('exists', "Please remove the '{0}' alias in '{1}' and retry this action.", this.applicationName, file);
+					const env = this.contextService.getConfiguration().env;
+					const message = nls.localize('exists', "Please remove the alias referencing '{0}' in '{1}' (line {2}) and retry this action.", env.darwinBundleIdentifier, file, lineNumber);
 					const input = { resource, mime: 'text/x-shellscript' };
 					const actions = [
 						new Action('inlineEdit', nls.localize('editFile', "Edit '{0}'", file), '', true, () => {
@@ -100,7 +110,7 @@ class InstallAction extends Action {
 							});
 						}
 					})
-					.then(() => this.messageService.show(Severity.Info, nls.localize('success', "Shell command '{0}' successfully installed in PATH.", this.applicationName)));
+					.then(() => this.messageService.show(Severity.Info, nls.localize('successIn', "Shell command '{0}' successfully installed in PATH.", this.applicationName)));
 			});
 	}
 
@@ -132,10 +142,7 @@ class InstallAction extends Action {
 		});
 	}
 
-	public checkLegacy(): TPromise<string[]> {
-		const readOrEmpty = name => pfs.readFile(name, 'utf8')
-			.then(null, ignore('ENOENT', ''));
-
+	checkLegacy(): TPromise<ILegacyUse[]> {
 		const files = [
 			path.join(os.homedir(), '.bash_profile'),
 			path.join(os.homedir(), '.bashrc'),
@@ -144,14 +151,21 @@ class InstallAction extends Action {
 
 		return TPromise.join(files.map(f => readOrEmpty(f))).then(result => {
 			return result.reduce((result, contents, index) => {
+				const file = files[index];
 				const env = this.contextService.getConfiguration().env;
+				const lines = contents.split(/\r?\n/);
 
-				if (contents.indexOf(env.darwinBundleIdentifier) > -1) {
-					result.push(files[index]);
-				}
+				lines.some((line, index) => {
+					if (line.indexOf(env.darwinBundleIdentifier) > -1 && !/^\s*#/.test(line)) {
+						result.push({ file, lineNumber: index + 1 });
+						return true;
+					}
+
+					return false;
+				});
 
 				return result;
-			}, []);
+			}, [] as ILegacyUse[]);
 		});
 	}
 }
@@ -159,7 +173,7 @@ class InstallAction extends Action {
 class UninstallAction extends Action {
 
 	static ID = 'workbench.action.uninstallCommandLine';
-	static LABEL = nls.localize('uninstall', 'Uninstall from PATH');
+	static LABEL = nls.localize('uninstall', "Uninstall 'code' command from PATH");
 
 	constructor(
 		id: string,
@@ -181,7 +195,7 @@ class UninstallAction extends Action {
 	run(): TPromise<void> {
 		return pfs.unlink(this.target)
 			.then(null, ignore('ENOENT'))
-			.then(() => this.messageService.show(Severity.Info, nls.localize('success', "Shell command '{0}' successfully uninstalled from PATH.", this.applicationName)));
+			.then(() => this.messageService.show(Severity.Info, nls.localize('successFrom', "Shell command '{0}' successfully uninstalled from PATH.", this.applicationName)));
 	}
 }
 

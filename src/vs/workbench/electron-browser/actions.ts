@@ -16,7 +16,6 @@ import {IMessageService, Severity} from 'vs/platform/message/common/message';
 import {IWindowConfiguration} from 'vs/workbench/electron-browser/window';
 import {IWorkspaceContextService} from 'vs/platform/workspace/common/workspace';
 import {IQuickOpenService} from 'vs/workbench/services/quickopen/common/quickOpenService';
-import {INullService} from 'vs/platform/instantiation/common/instantiation';
 import {IConfigurationService} from 'vs/platform/configuration/common/configuration';
 
 import {ipcRenderer as ipc, webFrame, remote} from 'electron';
@@ -146,12 +145,12 @@ export class ToggleDevToolsAction extends Action {
 	public static ID = 'workbench.action.toggleDevTools';
 	public static LABEL = nls.localize('toggleDevTools', "Toggle Developer Tools");
 
-	constructor(id: string, label: string, @INullService ns) {
+	constructor(id: string, label: string, @IWindowService private windowService: IWindowService) {
 		super(id, label);
 	}
 
 	public run(): TPromise<boolean> {
-		remote.getCurrentWindow().webContents.toggleDevTools();
+		ipc.send('vscode:toggleDevTools', this.windowService.getWindowId());
 
 		return TPromise.as(true);
 	}
@@ -162,7 +161,7 @@ export class ZoomInAction extends Action {
 	public static ID = 'workbench.action.zoomIn';
 	public static LABEL = nls.localize('zoomIn', "Zoom in");
 
-	constructor(id: string, label: string, @INullService ns) {
+	constructor(id: string, label: string) {
 		super(id, label);
 	}
 
@@ -397,17 +396,30 @@ export class OpenRecentAction extends Action {
 	}
 
 	public run(): TPromise<boolean> {
-		let picks = this.contextService.getConfiguration().env.recentPaths.map(p => {
+		const recentFolders = this.contextService.getConfiguration().env.recentFolders;
+		const recentFiles = this.contextService.getConfiguration().env.recentFiles;
+
+		let folderPicks = recentFolders.map((p, index) => {
 			return {
 				label: paths.basename(p),
 				description: paths.dirname(p),
-				path: p
+				path: p,
+				separator: index === 0 ? { label: nls.localize('folders', "folders") } : void 0
+			};
+		});
+
+		let filePicks = recentFiles.map((p, index) => {
+			return {
+				label: paths.basename(p),
+				description: paths.dirname(p),
+				path: p,
+				separator: index === 0 ? { label: nls.localize('files', "files"), border: true } : void 0
 			};
 		});
 
 		const hasWorkspace = !!this.contextService.getWorkspace();
 
-		return this.quickOpenService.pick(picks, {
+		return this.quickOpenService.pick(folderPicks.concat(...filePicks), {
 			autoFocus: { autoFocusFirstEntry: !hasWorkspace, autoFocusSecondEntry: hasWorkspace },
 			placeHolder: nls.localize('openRecentPlaceHolder', "Select a path to open"),
 			matchOnDescription: true

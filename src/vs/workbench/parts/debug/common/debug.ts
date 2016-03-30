@@ -16,6 +16,7 @@ export const VIEWLET_ID = 'workbench.view.debug';
 export const REPL_ID = 'workbench.panel.repl';
 export const DEBUG_SERVICE_ID = 'debugService';
 export const CONTEXT_IN_DEBUG_MODE = 'inDebugMode';
+export const EDITOR_CONTRIBUTION_ID = 'editor.contrib.debug';
 
 // raw
 
@@ -23,7 +24,14 @@ export interface IRawModelUpdate {
 	threadId: number;
 	thread?: DebugProtocol.Thread;
 	callStack?: DebugProtocol.StackFrame[];
-	stoppedReason?: string;
+	stoppedDetails?: IRawStoppedDetails;
+	allThreadsStopped?: boolean;
+}
+
+export interface IRawStoppedDetails {
+	reason: string;
+	threadId?: number;
+	text?: string;
 }
 
 // model
@@ -46,8 +54,31 @@ export interface IExpression extends ITreeElement, IExpressionContainer {
 export interface IThread extends ITreeElement {
 	threadId: number;
 	name: string;
-	callStack: IStackFrame[];
-	stoppedReason: string;
+	stoppedDetails: IRawStoppedDetails;
+
+	/**
+	 * Queries the debug adapter for the callstack and returns a promise with
+	 * the stack frames of the callstack.
+	 * If the thread is not stopped, it returns a promise to an empty array.
+	 */
+	getCallStack(debugService: IDebugService): TPromise<IStackFrame[]>;
+
+	/**
+	 * Gets the callstack if it has already been received from the debug
+	 * adapter, otherwise it returns undefined.
+	 */
+	getCachedCallStack(): IStackFrame[];
+
+	/**
+	 * Invalidates the callstack cache
+	 */
+	clearCallStack(): void;
+
+	/**
+	 * Indicates whether this thread is stopped. The callstack for stopped
+	 * threads can be retrieved from the debug adapter.
+	 */
+	stopped: boolean;
 }
 
 export interface IScope extends IExpressionContainer {
@@ -93,7 +124,8 @@ export interface IFunctionBreakpoint extends IEnablement {
 }
 
 export interface IExceptionBreakpoint extends IEnablement {
-	name: string;
+	filter: string;
+	label: string;
 }
 
 // events
@@ -113,7 +145,8 @@ export var ViewModelEvents = {
 
 export var ServiceEvents = {
 	STATE_CHANGED: 'StateChanged',
-	TYPE_NOT_SUPPORTED: 'TypeNotSupported'
+	TYPE_NOT_SUPPORTED: 'TypeNotSupported',
+	CONFIGURATION_CHANGED: 'ConfigurationChanged'
 };
 
 export var SessionEvents = {
@@ -155,7 +188,8 @@ export enum State {
 	Inactive,
 	Initializing,
 	Stopped,
-	Running
+	Running,
+	RunningNoDebug
 }
 
 // service interfaces
@@ -184,6 +218,7 @@ export interface IConfig {
 	preLaunchTask?: string;
 	externalConsole?: boolean;
 	debugServer?: number;
+	noDebug?: boolean;
 }
 
 export interface IRawEnvAdapter {
@@ -210,7 +245,7 @@ export interface IRawAdapter extends IRawEnvAdapter {
 export interface IRawDebugSession extends ee.EventEmitter {
 	getType(): string;
 	isAttach: boolean;
-	capablities: DebugProtocol.Capabilites;
+	capabilities: DebugProtocol.Capabilites;
 	disconnect(restart?: boolean, force?: boolean): TPromise<DebugProtocol.DisconnectResponse>;
 
 	next(args: DebugProtocol.NextArguments): TPromise<DebugProtocol.NextResponse>;
@@ -219,6 +254,7 @@ export interface IRawDebugSession extends ee.EventEmitter {
 	continue(args: DebugProtocol.ContinueArguments): TPromise<DebugProtocol.ContinueResponse>;
 	pause(args: DebugProtocol.PauseArguments): TPromise<DebugProtocol.PauseResponse>;
 
+	stackTrace(args: DebugProtocol.StackTraceArguments): TPromise<DebugProtocol.StackTraceResponse>;
 	scopes(args: DebugProtocol.ScopesArguments): TPromise<DebugProtocol.ScopesResponse>;
 	variables(args: DebugProtocol.VariablesArguments): TPromise<DebugProtocol.VariablesResponse>;
 	evaluate(args: DebugProtocol.EvaluateArguments): TPromise<DebugProtocol.EvaluateResponse>;
@@ -269,7 +305,7 @@ export interface IDebugService extends ee.IEventEmitter {
 	/**
 	 * Creates a new debug session. Depending on the configuration will either 'launch' or 'attach'.
 	 */
-	createSession(): TPromise<any>;
+	createSession(noDebug: boolean): TPromise<any>;
 
 	/**
 	 * Restarts an active debug session or creates a new one if there is no active session.
@@ -302,6 +338,11 @@ export interface IDebugService extends ee.IEventEmitter {
 	revealRepl(focus?: boolean): TPromise<void>;
 }
 
+// Editor interfaces
+export interface IDebugEditorContribution extends editor.IEditorContribution {
+	showHover(range: editor.IEditorRange, hoveringOver: string, focus: boolean): TPromise<void>;
+}
+
 // utils
 
 const _formatPIIRegexp = /{([^}]+)}/g;
@@ -312,7 +353,7 @@ export function formatPII(value:string, excludePII: boolean, args: {[key: string
 			return match;
 		}
 
-		return args.hasOwnProperty(group) ?
+		return args && args.hasOwnProperty(group) ?
 			args[group] :
 			match;
 	});

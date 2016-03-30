@@ -5,6 +5,7 @@
 'use strict';
 
 import Assert = require('vs/base/common/assert');
+import { onUnexpectedError } from 'vs/base/common/errors';
 import { IDisposable, combinedDispose } from 'vs/base/common/lifecycle';
 import arrays = require('vs/base/common/arrays');
 import { INavigator } from 'vs/base/common/iterator';
@@ -156,7 +157,7 @@ export class ItemRegistry extends Events.EventEmitter {
 
 	public dispose(): void {
 		super.dispose();
-		delete this.items;
+		this.items = null;
 	}
 }
 
@@ -389,7 +390,7 @@ export class Item extends Events.EventEmitter {
 				childrenPromise = WinJS.TPromise.as([]);
 			}
 
-			return childrenPromise.then((elements: any[]) => {
+			const result = childrenPromise.then((elements: any[]) => {
 				elements = !elements ? [] : elements.slice(0);
 				elements = this.sort(elements);
 
@@ -424,9 +425,11 @@ export class Item extends Events.EventEmitter {
 				} else {
 					return WinJS.TPromise.as(null);
 				}
-			}).then(() => {
-				this.emit('item:childrenRefreshed', eventData);
 			});
+
+			return result
+				.then(null, onUnexpectedError)
+				.then(() => this.emit('item:childrenRefreshed', eventData));
 		};
 
 		return safe ? doRefresh() : this.lock.run(this, doRefresh);
@@ -571,11 +574,11 @@ export class Item extends Events.EventEmitter {
 	public dispose(): void {
 		this.forEachChild((child) => child.dispose());
 
-		delete this.parent;
-		delete this.previous;
-		delete this.next;
-		delete this.firstChild;
-		delete this.lastChild;
+		this.parent = null;
+		this.previous = null;
+		this.next = null;
+		this.firstChild = null;
+		this.lastChild = null;
 
 		var eventData: IItemDisposeEvent = { item: this };
 		this.emit('item:dispose', eventData);

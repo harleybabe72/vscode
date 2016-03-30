@@ -39,6 +39,8 @@ export default class URI {
 	private _path: string;
 	private _query: string;
 	private _fragment: string;
+	private _formatted: string;
+	private _fsPath: string;
 
 	constructor() {
 		this._scheme = URI._empty;
@@ -46,6 +48,9 @@ export default class URI {
 		this._path = URI._empty;
 		this._query = URI._empty;
 		this._fragment = URI._empty;
+
+		this._formatted = null;
+		this._fsPath = null;
 	}
 
 	/**
@@ -86,8 +91,6 @@ export default class URI {
 	}
 
 	// ---- filesystem path -----------------------
-
-	private _fsPath: string;
 
 	/**
 	 * Returns a string representing the corresponding file system path of this URI.
@@ -152,13 +155,14 @@ export default class URI {
 	// ---- parse & validate ------------------------
 
 	public static parse(value: string): URI {
-		var ret = URI._parse(value);
-		ret = ret.with(undefined,
-			decodeURIComponent(ret.authority),
-			decodeURIComponent(ret.path),
-			decodeURIComponent(ret.query),
-			decodeURIComponent(ret.fragment));
-
+		const ret = new URI();
+		const data = URI._parseComponents(value);
+		ret._scheme = data.scheme;
+		ret._authority = decodeURIComponent(data.authority);
+		ret._path = decodeURIComponent(data.path);
+		ret._query = decodeURIComponent(data.query);
+		ret._fragment = decodeURIComponent(data.fragment);
+		URI._validate(ret);
 		return ret;
 	}
 
@@ -173,29 +177,39 @@ export default class URI {
 			? '/' + path
 			: path;
 
-		var ret = URI._parse(path);
-		if (ret.scheme || ret.fragment || ret.query) {
+		const data = URI._parseComponents(path);
+		if (data.scheme || data.fragment || data.query) {
 			throw new Error('Path contains a scheme, fragment or a query. Can not convert it to a file uri.');
 		}
 
-		ret = ret.with('file', undefined,
-			decodeURIComponent(ret.path[0] === '/' ? ret.path : '/' + ret.path), // path starts with slash
-			undefined, undefined);
-
+		const ret = new URI();
+		ret._scheme = 'file';
+		ret._authority = data.authority;
+		ret._path = decodeURIComponent(data.path[0] === '/' ? data.path : '/' + data.path); // path starts with slash
+		ret._query = data.query;
+		ret._fragment = data.fragment;
+		URI._validate(ret);
 		return ret;
 	}
 
-	private static _parse(value: string): URI {
-		var ret = new URI();
-		var match = URI._regexp.exec(value);
+	private static _parseComponents(value: string): UriComponents {
+
+		const ret: UriComponents = {
+			scheme: URI._empty,
+			authority: URI._empty,
+			path: URI._empty,
+			query: URI._empty,
+			fragment: URI._empty,
+		};
+
+		const match = URI._regexp.exec(value);
 		if (match) {
-			ret._scheme = match[2] || ret._scheme;
-			ret._authority = match[4] || ret._authority;
-			ret._path = match[5] || ret._path;
-			ret._query = match[7] || ret._query;
-			ret._fragment = match[9] || ret._fragment;
+			ret.scheme = match[2] || ret.scheme;
+			ret.authority = match[4] || ret.authority;
+			ret.path = match[5] || ret.path;
+			ret.query = match[7] || ret.query;
+			ret.fragment = match[9] || ret.fragment;
 		}
-		URI._validate(ret);
 		return ret;
 	}
 
@@ -220,8 +234,6 @@ export default class URI {
 	}
 
 	// ---- printing/externalize ---------------------------
-
-	private _formatted: string;
 
 	public toString(): string {
 		if (!this._formatted) {
@@ -284,7 +296,7 @@ export default class URI {
 	}
 
 	public toJSON(): any {
-		return <URIComponents> {
+		return <UriState> {
 			scheme: this.scheme,
 			authority: this.authority,
 			path: this.path,
@@ -298,25 +310,28 @@ export default class URI {
 
 	static revive(data: any): URI {
 		let result = new URI();
-		result._scheme = (<URIComponents> data).scheme;
-		result._authority = (<URIComponents> data).authority;
-		result._path = (<URIComponents> data).path;
-		result._query = (<URIComponents> data).query;
-		result._fragment = (<URIComponents> data).fragment;
-		result._fsPath = (<URIComponents> data).fsPath;
-		result._formatted = (<URIComponents>data).external;
+		result._scheme = (<UriState> data).scheme;
+		result._authority = (<UriState> data).authority;
+		result._path = (<UriState> data).path;
+		result._query = (<UriState> data).query;
+		result._fragment = (<UriState> data).fragment;
+		result._fsPath = (<UriState> data).fsPath;
+		result._formatted = (<UriState>data).external;
 		URI._validate(result);
 		return result;
 	}
 }
 
-interface URIComponents {
-	$mid: number;
+interface UriComponents {
 	scheme: string;
 	authority: string;
 	path: string;
-	fsPath: string;
 	query: string;
 	fragment: string;
+}
+
+interface UriState extends UriComponents {
+	$mid: number;
+	fsPath: string;
 	external: string;
 }

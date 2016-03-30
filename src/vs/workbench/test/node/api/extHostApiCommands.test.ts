@@ -7,16 +7,14 @@
 
 import * as assert from 'assert';
 import {setUnexpectedErrorHandler, errorHandler} from 'vs/base/common/errors';
-import {create} from 'vs/base/common/types';
 import URI from 'vs/base/common/uri';
 import {TPromise} from 'vs/base/common/winjs.base';
 import * as types from 'vs/workbench/api/node/extHostTypes';
-import {Range as CodeEditorRange} from 'vs/editor/common/core/range';
 import * as EditorCommon from 'vs/editor/common/editorCommon';
 import {Model as EditorModel} from 'vs/editor/common/model/model';
-import {TestThreadService} from './testThreadService'
-import {create as createInstantiationService} from 'vs/platform/instantiation/common/instantiationService';
-import {MarkerService} from 'vs/platform/markers/common/markerService';
+import {TestThreadService} from './testThreadService';
+import {createInstantiationService as createInstantiationService} from 'vs/platform/instantiation/common/instantiationService';
+import {MainProcessMarkerService} from 'vs/platform/markers/common/markerService';
 import {IMarkerService} from 'vs/platform/markers/common/markers';
 import {IThreadService} from 'vs/platform/thread/common/thread';
 import {IKeybindingService} from 'vs/platform/keybinding/common/keybindingService';
@@ -34,6 +32,7 @@ const model: EditorCommon.IModel = new EditorModel(
 		'This is the second line',
 		'This is the third line',
 	].join('\n'),
+	EditorModel.DEFAULT_CREATION_OPTIONS,
 	undefined,
 	URI.parse('far://testing/file.b'));
 
@@ -60,7 +59,7 @@ suite('ExtHostLanguageFeatureCommands', function() {
 				return TPromise.as(instantiationService.invokeFunction(handler, args));
 			}
 		});
-		instantiationService.addSingleton(IMarkerService, new MarkerService(threadService));
+		instantiationService.addSingleton(IMarkerService, new MainProcessMarkerService(threadService));
 		instantiationService.addSingleton(IThreadService, threadService);
 		instantiationService.addSingleton(IModelService, <IModelService>{
 			serviceId: IModelService,
@@ -70,7 +69,8 @@ suite('ExtHostLanguageFeatureCommands', function() {
 			getModels(): any { throw new Error(); },
 			onModelAdded: undefined,
 			onModelModeChanged: undefined,
-			onModelRemoved: undefined
+			onModelRemoved: undefined,
+			getCreationOptions(): any { throw new Error(); }
 		});
 
 		threadService.getRemotable(ExtHostModelService)._acceptModelAdd({
@@ -82,7 +82,12 @@ suite('ExtHostLanguageFeatureCommands', function() {
 				EOL: model.getEOL(),
 				lines: model.getValue().split(model.getEOL()),
 				BOM: '',
-				length: -1
+				length: -1,
+				options: {
+					tabSize: 4,
+					insertSpaces: true,
+					defaultEOL: EditorCommon.DefaultEndOfLine.LF
+				}
 			},
 		});
 
@@ -92,7 +97,7 @@ suite('ExtHostLanguageFeatureCommands', function() {
 		mainThread = threadService.getRemotable(MainThreadLanguageFeatures);
 		extHost = threadService.getRemotable(ExtHostLanguageFeatures);
 
-		threadService.sync().then(done, done)
+		threadService.sync().then(done, done);
 	});
 
 	suiteTeardown(() => {
@@ -134,7 +139,7 @@ suite('ExtHostLanguageFeatureCommands', function() {
 				return [
 					new types.SymbolInformation(query, types.SymbolKind.Array, new types.Range(0, 0, 1, 1), URI.parse('far://testing/first')),
 					new types.SymbolInformation(query, types.SymbolKind.Array, new types.Range(0, 0, 1, 1), URI.parse('far://testing/second'))
-				]
+				];
 			}
 		}));
 
@@ -142,7 +147,7 @@ suite('ExtHostLanguageFeatureCommands', function() {
 			provideWorkspaceSymbols(query): any {
 				return [
 					new types.SymbolInformation(query, types.SymbolKind.Array, new types.Range(0, 0, 1, 1), URI.parse('far://testing/first'))
-				]
+				];
 			}
 		}));
 
@@ -193,7 +198,7 @@ suite('ExtHostLanguageFeatureCommands', function() {
 					new types.Location(doc.uri, new types.Range(0, 0, 0, 0)),
 					new types.Location(doc.uri, new types.Range(0, 0, 0, 0)),
 					new types.Location(doc.uri, new types.Range(0, 0, 0, 0)),
-				]
+				];
 			}
 		}));
 
@@ -213,7 +218,7 @@ suite('ExtHostLanguageFeatureCommands', function() {
 				return [
 					new types.SymbolInformation('testing1', types.SymbolKind.Enum, new types.Range(1, 0, 1, 0)),
 					new types.SymbolInformation('testing2', types.SymbolKind.Enum, new types.Range(0, 1, 0, 3)),
-				]
+				];
 			}
 		}));
 
@@ -334,7 +339,7 @@ suite('ExtHostLanguageFeatureCommands', function() {
 			foo() { },
 			bar() { },
 			big: extHost
-		}
+		};
 
 		disposables.push(extHost.registerCodeLensProvider(defaultSelector, <vscode.CodeLensProvider>{
 			provideCodeLenses(): any {

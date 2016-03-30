@@ -9,7 +9,7 @@ import * as assert from 'assert';
 import {Promise, TPromise} from 'vs/base/common/winjs.base';
 import paths = require('vs/base/common/paths');
 import URI from 'vs/base/common/uri';
-import {create} from 'vs/platform/instantiation/common/instantiationService';
+import {createInstantiationService} from 'vs/platform/instantiation/common/instantiationService';
 import {BaseEditor} from 'vs/workbench/browser/parts/editor/baseEditor';
 import {EditorInput, EditorOptions, TextEditorOptions} from 'vs/workbench/common/editor';
 import {StringEditorInput} from 'vs/workbench/common/editor/stringEditorInput';
@@ -141,14 +141,14 @@ class TestProgressBar {
 	}
 
 	public infinite() {
-		delete this.fDone;
+		this.fDone = null;
 		this.fInfinite = true;
 
 		return this;
 	}
 
 	public total(total: number) {
-		delete this.fDone;
+		this.fDone = null;
 		this.fTotal = total;
 
 		return this;
@@ -159,7 +159,7 @@ class TestProgressBar {
 	}
 
 	public worked(worked: number) {
-		delete this.fDone;
+		this.fDone = null;
 
 		if (this.fWorked) {
 			this.fWorked += worked;
@@ -173,9 +173,9 @@ class TestProgressBar {
 	public done() {
 		this.fDone = true;
 
-		delete this.fInfinite;
-		delete this.fWorked;
-		delete this.fTotal;
+		this.fInfinite = null;
+		this.fWorked = null;
+		this.fTotal = null;
 
 		return this;
 	}
@@ -202,7 +202,7 @@ suite('Workbench UI Services', () => {
 					value: 'Hello Html',
 					etag: 'index.txt',
 					mime: 'text/plain',
-					charset: 'utf8',
+					encoding: 'utf8',
 					mtime: new Date().getTime(),
 					name: paths.basename(resource.fsPath)
 				});
@@ -214,7 +214,7 @@ suite('Workbench UI Services', () => {
 						resource: res,
 						etag: 'index.txt',
 						mime: 'text/plain',
-						charset: 'utf8',
+						encoding: 'utf8',
 						mtime: new Date().getTime(),
 						name: paths.basename(res.fsPath)
 					};
@@ -256,7 +256,7 @@ suite('Workbench UI Services', () => {
 			lifecycleService: new TestLifecycleService(),
 			fileService: TestFileService
 		};
-		let inst = create(services);
+		let inst = createInstantiationService(services);
 
 		let textFileService = inst.createInstance(<any>TextFileService);
 		inst.registerService('textFileService', textFileService);
@@ -359,7 +359,7 @@ suite('Workbench UI Services', () => {
 			configurationService: new TestConfigurationService()
 		};
 
-		let inst = create(services);
+		let inst = createInstantiationService(services);
 		let textFileService = inst.createInstance(<any>TextFileService);
 		inst.registerService('textFileService', textFileService);
 		services['instantiationService'] = inst;

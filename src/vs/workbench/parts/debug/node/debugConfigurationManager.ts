@@ -6,13 +6,14 @@
 import path = require('path');
 import nls = require('vs/nls');
 import { TPromise } from 'vs/base/common/winjs.base';
+import strings = require('vs/base/common/strings');
 import objects = require('vs/base/common/objects');
 import uri from 'vs/base/common/uri';
-import { schemas } from 'vs/base/common/network';
+import { Schemas } from 'vs/base/common/network';
 import paths = require('vs/base/common/paths');
 import { IJSONSchema } from 'vs/base/common/jsonSchema';
 import editor = require('vs/editor/common/editorCommon');
-import pluginsRegistry = require('vs/platform/plugins/common/pluginsRegistry');
+import extensionsRegistry = require('vs/platform/extensions/common/extensionsRegistry');
 import platform = require('vs/platform/platform');
 import jsonContributionRegistry = require('vs/platform/jsonschemas/common/jsonContributionRegistry');
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
@@ -27,13 +28,13 @@ import { IQuickOpenService } from 'vs/workbench/services/quickopen/common/quickO
 
 // debuggers extension point
 
-export var debuggersExtPoint = pluginsRegistry.PluginsRegistry.registerExtensionPoint<debug.IRawAdapter[]>('debuggers', {
+export var debuggersExtPoint = extensionsRegistry.ExtensionsRegistry.registerExtensionPoint<debug.IRawAdapter[]>('debuggers', {
 	description: nls.localize('vscode.extension.contributes.debuggers', 'Contributes debug adapters.'),
 	type: 'array',
-	default: [{ type: '', extensions: [] }],
+	defaultSnippets: [{ body: [{ type: '', extensions: [] }] }],
 	items: {
 		type: 'object',
-		default: { type: '', program: '', runtime: '', enableBreakpointsFor: { languageIds: [ '' ] } },
+		defaultSnippets: [{ body: { type: '', program: '', runtime: '', enableBreakpointsFor: { languageIds: [ '' ] } } }],
 		properties: {
 			type: {
 				description: nls.localize('vscode.extension.contributes.debuggers.type', "Unique identifier for this debug adapter."),
@@ -194,9 +195,11 @@ export class ConfigurationManager {
 						this.adapters.push(adapter);
 					}
 
-					adapter.enableBreakpointsFor.languageIds.forEach(modeId => {
-						this.allModeIdsForBreakpoints[modeId] = true;
-					});
+					if (adapter.enableBreakpointsFor) {
+						adapter.enableBreakpointsFor.languageIds.forEach(modeId => {
+							this.allModeIdsForBreakpoints[modeId] = true;
+						});
+					}
 				});
 			});
 
@@ -205,7 +208,7 @@ export class ConfigurationManager {
 			this.adapters.forEach(adapter => {
 				const schemaAttributes = adapter.getSchemaAttributes();
 				if (schemaAttributes) {
-					schema.properties['configurations'].items.oneOf.push(...schemaAttributes);
+					(<IJSONSchema> schema.properties['configurations'].items).oneOf.push(...schemaAttributes);
 				}
 			});
 		});
@@ -220,7 +223,7 @@ export class ConfigurationManager {
 	}
 
 	public getAdapter(): Adapter {
-		return this.adapters.filter(adapter => adapter.type === this.configuration.type).pop();
+		return this.adapters.filter(adapter => strings.equalsIgnoreCase(adapter.type, this.configuration.type)).pop();
 	}
 
 	public setConfiguration(name: string): TPromise<void> {
@@ -238,7 +241,7 @@ export class ConfigurationManager {
 			if (this.configuration) {
 				if (this.systemVariables) {
 					Object.keys(this.configuration).forEach(key => {
-						this.configuration[key] = this.systemVariables.resolve(this.configuration[key]);
+						this.configuration[key] = this.systemVariables.resolveAny(this.configuration[key]);
 					});
 				}
 				this.configuration.debugServer = config.debugServer;
@@ -275,7 +278,7 @@ export class ConfigurationManager {
 	}
 
 	private getInitialConfigFileContent(): TPromise<string> {
-		return this.quickOpenService.pick(this.adapters, { placeHolder: nls.localize('selectDebug', "Select Debug Environment") })
+		return this.quickOpenService.pick(this.adapters, { placeHolder: nls.localize('selectDebug', "Select Environment") })
 		.then(adapter => {
 			if (!adapter) {
 				return null;
@@ -313,7 +316,7 @@ export class ConfigurationManager {
 			adapter.initialConfigurations.forEach(config => {
 				if (program && config.program) {
 					if (!path.isAbsolute(program)) {
-						program = path.join('${workspaceRoot}', program);
+						program = paths.join('${workspaceRoot}', program);
 					}
 
 					config.program = program;
@@ -323,7 +326,7 @@ export class ConfigurationManager {
 	}
 
 	public canSetBreakpointsIn(model: editor.IModel): boolean {
-		if (model.getAssociatedResource().scheme === schemas.inMemory) {
+		if (model.getAssociatedResource().scheme === Schemas.inMemory) {
 			return false;
 		}
 
