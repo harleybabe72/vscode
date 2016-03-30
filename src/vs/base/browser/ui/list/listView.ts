@@ -306,12 +306,7 @@ export class ListView<T> implements IScrollable, IDisposable {
 			const userHandler = handler;
 			handler = (event: MouseEvent) => {
 				const index = this.getItemIndex(event);
-
-				if (index < 0) {
-					return;
-				}
-
-				const element = this.items[index].element;
+				const element = index < 0 ? null : this.items[index].element;
 				userHandler(assign(event, { element, index }));
 			};
 		}

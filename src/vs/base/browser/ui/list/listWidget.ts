@@ -130,7 +130,11 @@ class Controller<T> implements IDisposable {
 	}
 
 	private onClick(e: IListMouseEvent<T>) {
-		this.list.setSelection(e.index);
+		if (e.index < 0) {
+			this.list.setSelection();
+		} else {
+			this.list.setSelection(e.index);
+		}
 	}
 
 	dispose() {
