@@ -7,13 +7,14 @@ import * as fs from 'fs';
 import platform = require('vs/base/common/platform');
 import { serve, Server, connect } from 'vs/base/parts/ipc/node/ipc.net';
 import { TPromise } from 'vs/base/common/winjs.base';
-
-// Services
+import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
+import { SyncDescriptor } from 'vs/platform/instantiation/common/descriptors';
+import {InstantiationService} from 'vs/platform/instantiation/common/instantiationService';
 import { IConfiguration } from 'vs/platform/workspace/common/workspace';
-import { WorkspaceContextService } from 'vs/workbench/services/workspace/common/contextService';
+import { IWorkspaceContextService, WorkspaceContextService } from 'vs/workbench/services/workspace/common/contextService';
 import { EventService } from 'vs/platform/event/common/eventService';
-
-// Extra services
+import { IEventService } from 'vs/platform/event/common/event';
+import { IExtensionsService } from 'vs/workbench/parts/extensions/common/extensions';
 import { ExtensionsChannel } from 'vs/workbench/parts/extensions/common/extensionsIpc';
 import { ExtensionsService } from 'vs/workbench/parts/extensions/node/extensionsService';
 
@@ -44,15 +45,26 @@ function setupPlanB(parentPid: number): void {
 }
 
 function main(server: Server, initData: IInitData): void {
+	const services = new ServiceCollection();
+
 	const eventService = new EventService();
 	const contextService = new WorkspaceContextService(eventService, null, initData.configuration, initData.contextServiceOptions);
-	const extensionService = new ExtensionsService(contextService);
-	const channel = new ExtensionsChannel(extensionService);
 
-	server.registerChannel('extensions', channel);
+	services.set(IEventService, eventService);
+	services.set(IWorkspaceContextService, contextService);
+	services.set(IExtensionsService, new SyncDescriptor(ExtensionsService));
 
-	// eventually clean up old extensions
-	setTimeout(() => extensionService.removeDeprecatedExtensions(), 5000);
+	const instantiationService = new InstantiationService(services);
+
+	instantiationService.invokeFunction(accessor => {
+		const extensionsService = accessor.get(IExtensionsService);
+
+		const channel = new ExtensionsChannel(extensionsService);
+		server.registerChannel('extensions', channel);
+
+		// eventually clean up old extensions
+		setTimeout(() => extensionsService.removeDeprecatedExtensions(), 5000);
+	});
 }
 
 function setupIPC(hook: string): TPromise<Server> {

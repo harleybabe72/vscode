@@ -75,6 +75,7 @@ export interface IExtensionsService {
 	install(zipPath: string): TPromise<IExtension>;
 	uninstall(extension: IExtension): TPromise<void>;
 	getInstalled(includeDuplicateVersions?: boolean): TPromise<IExtension[]>;
+	removeDeprecatedExtensions(): TPromise<void>;
 }
 
 export const IExtensionTipsService = createDecorator<IExtensionTipsService>('extensionTipsService');
