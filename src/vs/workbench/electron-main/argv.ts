@@ -27,6 +27,8 @@ export interface ParsedArgs extends minimist.ParsedArgs {
 	timestamp: string;
 	debugBrkPluginHost: string;
 	debugPluginHost: string;
+	'install-extension': string;
+	'uninstall-extension': string;
 }
 
 const options: minimist.Opts = {
@@ -36,7 +38,9 @@ const options: minimist.Opts = {
 		'extensionHomePath',
 		'extensionDevelopmentPath',
 		'extensionTestsPath',
-		'timestamp'
+		'timestamp',
+		'install-extension',
+		'uninstall-extension'
 	],
 	boolean: [
 		'help',
@@ -88,4 +92,11 @@ ${ indent }                      window.
 ${ indent }--user-data-dir <dir> Specifies the directory that user data is kept in,
 ${ indent }                      useful when running as root.
 ${ indent }-v, --version         Print version.
-${ indent }-w, --wait            Wait for the window to be closed before returning.`;
+${ indent }-w, --wait            Wait for the window to be closed before returning.
+${ indent }--install-extension <extension>
+${ indent }                      Installs an extension. You can either provide the
+${ indent }                      path to a .vsix file or the extension's id,
+${ indent }                      e.g: ms-vscode.cpptools
+${ indent }--uninstall-extension <extension>
+${ indent }                      Uninstalls an extension. You must provide the extension's
+${ indent }                      id, e.g: ms-vscode.cpptools`;
