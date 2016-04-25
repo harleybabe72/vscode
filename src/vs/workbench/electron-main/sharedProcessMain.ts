@@ -9,11 +9,11 @@ import { serve, Server, connect } from 'vs/base/parts/ipc/node/ipc.net';
 import { TPromise } from 'vs/base/common/winjs.base';
 import { ServiceCollection } from 'vs/platform/instantiation/common/serviceCollection';
 import { SyncDescriptor } from 'vs/platform/instantiation/common/descriptors';
-import {InstantiationService} from 'vs/platform/instantiation/common/instantiationService';
+import { InstantiationService } from 'vs/platform/instantiation/common/instantiationService';
 import { IConfiguration } from 'vs/platform/workspace/common/workspace';
 import { IWorkspaceContextService, WorkspaceContextService } from 'vs/workbench/services/workspace/common/contextService';
-import { EventService } from 'vs/platform/event/common/eventService';
 import { IEventService } from 'vs/platform/event/common/event';
+import { EventService } from 'vs/platform/event/common/eventService';
 import { IExtensionsService } from 'vs/workbench/parts/extensions/common/extensions';
 import { ExtensionsChannel } from 'vs/workbench/parts/extensions/common/extensionsIpc';
 import { ExtensionsService } from 'vs/workbench/parts/extensions/node/extensionsService';
@@ -58,7 +58,6 @@ function main(server: Server, initData: IInitData): void {
 
 	instantiationService.invokeFunction(accessor => {
 		const extensionsService = accessor.get(IExtensionsService);
-
 		const channel = new ExtensionsChannel(extensionsService);
 		server.registerChannel('extensions', channel);
 
