@@ -253,7 +253,6 @@ function setupIPC(accessor: ServicesAccessor): TPromise<Server> {
 	return setup(true);
 }
 
-// TODO: isolate
 const services = new ServiceCollection();
 
 services.set(IEnvironmentService, new SyncDescriptor(EnvService));
