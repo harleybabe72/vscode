@@ -18,6 +18,7 @@ export interface IExtensionsChannel extends IChannel {
 	call(command: 'install', extensionOrPath: IExtension | string): TPromise<IExtension>;
 	call(command: 'uninstall', extension: IExtension): TPromise<void>;
 	call(command: 'getInstalled', includeDuplicateVersions: boolean): TPromise<IExtension[]>;
+	call(command: 'removeDeprecatedExtensions'): TPromise<void>;
 	call(command: string, arg: any): TPromise<any>;
 }
 
@@ -34,6 +35,7 @@ export class ExtensionsChannel implements IExtensionsChannel {
 			case 'install': return this.service.install(arg);
 			case 'uninstall': return this.service.uninstall(arg);
 			case 'getInstalled': return this.service.getInstalled(arg);
+			case 'removeDeprecatedExtensions': return this.service.removeDeprecatedExtensions();
 		}
 	}
 }
@@ -68,5 +70,9 @@ export class ExtensionsChannelClient implements IExtensionsService {
 
 	getInstalled(includeDuplicateVersions?: boolean): TPromise<IExtension[]> {
 		return this.channel.call('getInstalled', includeDuplicateVersions);
+	}
+
+	removeDeprecatedExtensions(): TPromise<void> {
+		return this.channel.call('removeDeprecatedExtensions');
 	}
 }
