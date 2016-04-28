@@ -6,6 +6,7 @@
 
 import 'vs/css!vs/base/browser/ui/progressbar/progressbar';
 import * as nls from 'vs/nls';
+import * as dom from 'vs/base/browser/dom';
 import URI from 'vs/base/common/uri';
 import {TPromise} from 'vs/base/common/winjs.base';
 import {renderHtml} from 'vs/base/browser/htmlContentRenderer';
@@ -228,8 +229,9 @@ export class ModesContentHoverWidget extends ContentHoverWidget {
 			highlightRange = Range.plusRange(highlightRange, msg.range);
 
 			var row:HTMLElement = document.createElement('div');
+			dom.addClass(row, 'row');
 			var span:HTMLElement = null;
-			var container = row;
+			var container: HTMLElement = row;
 
 			if (msg.className) {
 				span = document.createElement('span');
@@ -240,7 +242,7 @@ export class ModesContentHoverWidget extends ContentHoverWidget {
 
 			if(msg.htmlContent && msg.htmlContent.length > 0) {
 				msg.htmlContent.forEach((content) => {
-					container.appendChild(renderHtml(content, {
+					const element = renderHtml(content, {
 						actionCallback: (content) => {
 							this._openerService.open(URI.parse(content));
 						},
@@ -252,7 +254,13 @@ export class ModesContentHoverWidget extends ContentHoverWidget {
 							}
 							return tokenizeToString(value, model.getMode());
 						}
-					}));
+					});
+
+					if (content.code && element instanceof HTMLElement) {
+						dom.addClass(element, 'code');
+					}
+
+					container.appendChild(element);
 				});
 			} else {
 				container.textContent = msg.value;

@@ -31,6 +31,20 @@
 	white-space: pre-wrap;
 }
 
+.monaco-editor-hover .row > * {
+	color: #A21B1B;
+	font-size: 0.9em;
+	font-family: "Segoe UI", "SFUIText-Regular", "HelveticaNeue", sans-serif, "Droid Sans Fallback";
+}
+
+.monaco-editor.vs-dark .monaco-editor-hover .row > * {
+	color: #C07A7A;
+}
+
+.monaco-editor-hover .row > .code {
+	font-family: inherit;
+}
+
 .monaco-editor.vs-dark .monaco-editor-hover {
 	border-color: #555;
 }
