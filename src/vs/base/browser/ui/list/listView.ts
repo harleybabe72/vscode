@@ -9,7 +9,7 @@ import { Gesture } from 'vs/base/browser/touch';
 import * as DOM from 'vs/base/browser/dom';
 import { ScrollableElement } from 'vs/base/browser/ui/scrollbar/scrollableElement';
 import { ScrollbarVisibility } from 'vs/base/browser/ui/scrollbar/scrollableElementOptions';
-import { RangeMap, IRange } from './rangeMap';
+import { RangeMap, IRange, relativeComplement, each } from './rangeMap';
 import { IDelegate, IRenderer } from './list';
 import { RowCache, IRow } from './rowCache';
 import { LcsDiff, ISequence } from 'vs/base/common/diff/diff';
@@ -46,6 +46,12 @@ const MouseEventTypes = [
 	'contextmenu'
 ];
 
+		const str = r => {
+			let result = '';
+			each(r, i => result += ` ${ i }`);
+			return result;
+		};
+
 export class ListView<T> implements IDisposable {
 
 	private items: IItem<T>[];
@@ -53,16 +59,12 @@ export class ListView<T> implements IDisposable {
 	private rangeMap: RangeMap;
 	private cache: RowCache<T>;
 	private renderers: { [templateId: string]: IRenderer<T, any>; };
-
 	private lastRenderTop: number;
 	private lastRenderHeight: number;
-
 	private _domNode: HTMLElement;
 	private gesture: Gesture;
 	private rowsContainer: HTMLElement;
 	private scrollableElement: ScrollableElement;
-
-
 	private toDispose: IDisposable[];
 
 	constructor(
@@ -103,6 +105,13 @@ export class ListView<T> implements IDisposable {
 		this.toDispose = [this.rangeMap, this.gesture, listener, this.scrollableElement];
 
 		this.layout();
+
+		// const i = setInterval(() => {
+		// 	const ranges = this.getRenderedItemRanges();
+		// 	console.log(ranges.length, this.rowsContainer.children.length);
+		// }, 1000);
+
+		// this.toDispose.push({ dispose: () => clearInterval(i) });
 	}
 
 	get domNode(): HTMLElement {
@@ -110,7 +119,15 @@ export class ListView<T> implements IDisposable {
 	}
 
 	splice(start: number, deleteCount: number, ...elements: T[]): T[] {
+		// console.log('splice', start, deleteCount, elements.length);
+
+
+		const details = i => ({ label: i.item.element.suggestion.label, top: this.elementTop(i.index) ,height: i.item.size });
 		const before = this.getRenderedItemRanges();
+		const beforeDetails = before.map(details);
+		const beforeTop = this.getScrollTop();
+		const beforeHeight = this.renderHeight;
+
 		const inserted = elements.map<IItem<T>>(element => ({
 			id: String(this.itemId++),
 			element,
@@ -123,18 +140,42 @@ export class ListView<T> implements IDisposable {
 		const deleted = this.items.splice(start, deleteCount, ...inserted);
 
 		const after = this.getRenderedItemRanges();
-		const lcs = new LcsDiff(toSequence(before), toSequence(after), null);
-		const diffs = lcs.ComputeDiff();
+		const afterDetails = after.map(details);
+		const afterTop = this.getScrollTop();
+		const afterHeight = this.renderHeight;
 
-		for (const diff of diffs) {
-			for (let i = 0; i < diff.originalLength; i++) {
-				this.removeItemFromDOM(before[diff.originalStart + i].item);
-			}
+		// (<any>console).table(afterDetails);
 
-			for (let i = 0; i < diff.modifiedLength; i++) {
-				this.insertItemInDOM(after[diff.modifiedStart + i].item, after[0].index + diff.modifiedStart + i);
-			}
-		}
+		// const lcs = new LcsDiff(toSequence(before), toSequence(after), null);
+		// const diffs = lcs.ComputeDiff();
+
+		// for (const diff of diffs) {
+		// 	for (let i = 0; i < diff.originalLength; i++) {
+		// 		this.removeItemFromDOM(before[diff.originalStart + i].item);
+		// 	}
+
+		// 	for (let i = 0; i < diff.modifiedLength; i++) {
+		// 		this.insertItemInDOM(after[diff.modifiedStart + i].item, after[0].index + diff.modifiedStart + i);
+		// 	}
+		// }
+
+		before.forEach(i => this.removeItemFromDOM(i.item));
+		after.forEach(i => this.insertItemInDOM(i.item, i.index));
+
+			// (<any>console).table(beforeDetails);
+			// (<any>console).table(afterDetails);
+			// console.log(beforeTop, beforeHeight)
+
+		// if (after.length !== this.rowsContainer.children.length) {
+		// 	(<any>console).table(beforeDetails);
+		// 	(<any>console).table(afterDetails);
+
+		// 	console.log('height diff', beforeHeight, afterHeight);
+		// 	console.log('render top', beforeTop, afterTop);
+		// 	console.log('render height', this.renderHeight);
+
+		// 	debugger;
+		// }
 
 		const scrollHeight = this.getContentHeight();
 		this.rowsContainer.style.height = `${ scrollHeight }px`;
@@ -180,29 +221,69 @@ export class ListView<T> implements IDisposable {
 	// Render
 
 	private render(renderTop: number, renderHeight: number): void {
+		console.log('render');
 		const renderBottom = renderTop + renderHeight;
 		const thisRenderBottom = this.lastRenderTop + this.lastRenderHeight;
-		let i: number, stop: number;
+		// let i: number, stop: number;
 
-		// when view scrolls down, start rendering from the renderBottom
-		for (i = this.rangeMap.indexAfter(renderBottom) - 1, stop = this.rangeMap.indexAt(Math.max(thisRenderBottom, renderTop)); i >= stop; i--) {
-			this.insertItemInDOM(this.items[i], i);
-		}
+		const previousRange = {
+			start: this.rangeMap.indexAt(this.lastRenderTop),
+			end: this.rangeMap.indexAt(thisRenderBottom - 1) + 1
+		};
 
-		// when view scrolls up, start rendering from either this.renderTop or renderBottom
-		for (i = Math.min(this.rangeMap.indexAt(this.lastRenderTop), this.rangeMap.indexAfter(renderBottom)) - 1, stop = this.rangeMap.indexAt(renderTop); i >= stop; i--) {
-			this.insertItemInDOM(this.items[i], i);
-		}
+		const range = {
+			start: this.rangeMap.indexAt(renderTop),
+			end: this.rangeMap.indexAt(renderBottom - 1) + 1
+		};
 
-		// when view scrolls down, start unrendering from renderTop
-		for (i = this.rangeMap.indexAt(this.lastRenderTop), stop = Math.min(this.rangeMap.indexAt(renderTop), this.rangeMap.indexAfter(thisRenderBottom)); i < stop; i++) {
-			this.removeItemFromDOM(this.items[i]);
-		}
+		const toInsert = relativeComplement(range, previousRange);
+		const toRemove = relativeComplement(previousRange, range);
 
-		// when view scrolls up, start unrendering from either renderBottom this.renderTop
-		for (i = Math.max(this.rangeMap.indexAfter(renderBottom), this.rangeMap.indexAt(this.lastRenderTop)), stop = this.rangeMap.indexAfter(thisRenderBottom); i < stop; i++) {
-			this.removeItemFromDOM(this.items[i]);
-		}
+
+		const strInsert = str(toInsert);
+		const strRemove = str(toRemove);
+
+		// if (strInsert) { console.log('insert', strInsert); }
+		// if (strRemove) { console.log('remove', strRemove); }
+
+		each(toInsert, i => {
+			const item = this.items[i];
+
+			if (!item) {
+				console.log('before debugger');
+				debugger;
+				console.log('after debugger');
+			}
+
+			this.insertItemInDOM(item, i);
+		});
+		each(toRemove, i => this.removeItemFromDOM(this.items[i]));
+
+		// if (range.end - range.start !== this.rowsContainer.children.length) {
+		// 	debugger;
+		// }
+
+		// // when view scrolls down, start rendering from the renderBottom
+		// for (i = this.rangeMap.indexAfter(renderBottom) - 1, stop = this.rangeMap.indexAt(Math.max(thisRenderBottom, renderTop)); i >= stop; i--) {
+		// 	this.insertItemInDOM(this.items[i], i);
+		// }
+
+		// // when view scrolls up, start rendering from either this.renderTop or renderBottom
+		// for (i = Math.min(this.rangeMap.indexAt(this.lastRenderTop), this.rangeMap.indexAfter(renderBottom)) - 1, stop = this.rangeMap.indexAt(renderTop); i >= stop; i--) {
+		// 	this.insertItemInDOM(this.items[i], i);
+		// }
+
+		// // when view scrolls down, start unrendering from renderTop
+		// for (i = this.rangeMap.indexAt(this.lastRenderTop), stop = Math.min(this.rangeMap.indexAt(renderTop), this.rangeMap.indexAt(thisRenderBottom - 1)); i < stop; i++) {
+		// 	this.removeItemFromDOM(this.items[i]);
+		// }
+
+		// // when view scrolls up, start unrendering from either renderBottom this.renderTop
+		// for (i = Math.max(this.rangeMap.indexAfter(renderBottom - 1), this.rangeMap.indexAt(this.lastRenderTop)), stop = this.rangeMap.indexAfter(thisRenderBottom - 1); i < stop; i++) {
+		// 	console.log(renderBottom, this.lastRenderTop);
+		// 	console.log('removing', (<any>this.items[i].element).suggestion.label);
+		// 	this.removeItemFromDOM(this.items[i]);
+		// }
 
 		this.rowsContainer.style.transform = `translate3d(0px, -${ renderTop }px, 0px)`;
 		this.lastRenderTop = renderTop;
@@ -218,7 +299,9 @@ export class ListView<T> implements IDisposable {
 		let item = this.items[index];
 		let end = -1;
 
-		while (item && start <= renderBottom) {
+		start = this.rangeMap.positionAt(index);
+
+		while (item && start < renderBottom) {
 			end = start + item.size;
 			result.push({ item, index, range: { start, end }});
 			start = end;

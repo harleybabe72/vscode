@@ -484,23 +484,23 @@ export class SuggestWidget implements IContentWidget, IDisposable {
 
 		this.suggestionSupportsAutoAccept.set(!item.suggestion.noAutoAccept);
 		this.focusedItem = item;
-		this.list.setFocus(index);
+		// this.list.setFocus(index);
 		this.updateWidgetHeight();
 		this.list.reveal(index);
 
 		const position = this.model.getRequestPosition() || this.editor.getPosition();
 
-		this.currentSuggestionDetails = item.resolveDetails(this.editor.getModel(), position)
-			.then(details => {
-				item.updateDetails(details);
-				this.list.setFocus(index);
-				this.updateWidgetHeight();
-				this.list.reveal(index);
+		// this.currentSuggestionDetails = item.resolveDetails(this.editor.getModel(), position)
+		// 	.then(details => {
+		// 		item.updateDetails(details);
+		// 		this.list.setFocus(index);
+		// 		this.updateWidgetHeight();
+		// 		this.list.reveal(index);
 
-				this._ariaAlert(this._getSuggestionAriaAlertLabel(item));
-			})
-			.then(null, err => !isPromiseCanceledError(err) && onUnexpectedError(err))
-			.then(() => this.currentSuggestionDetails = null);
+		// 		this._ariaAlert(this._getSuggestionAriaAlertLabel(item));
+		// 	})
+		// 	.then(null, err => !isPromiseCanceledError(err) && onUnexpectedError(err))
+		// 	.then(() => this.currentSuggestionDetails = null);
 	}
 
 	private setState(state: State): void {

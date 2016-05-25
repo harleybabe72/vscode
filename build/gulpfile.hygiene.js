@@ -204,26 +204,26 @@ gulp.task('hygiene', function () {
 
 // this allows us to run this as a git pre-commit hook
 if (require.main === module) {
-	var cp = require('child_process');
-	cp.exec('git config core.autocrlf', function (err, out) {
-		var skipEOL = out.trim() === 'true';
+	// var cp = require('child_process');
+	// cp.exec('git config core.autocrlf', function (err, out) {
+	// 	var skipEOL = out.trim() === 'true';
 
-		cp.exec('git diff --cached --name-only', { maxBuffer: 2000 * 1024 }, function (err, out) {
-			if (err) {
-				console.error();
-				console.error(err);
-				process.exit(1);
-			}
+	// 	cp.exec('git diff --cached --name-only', { maxBuffer: 2000 * 1024 }, function (err, out) {
+	// 		if (err) {
+	// 			console.error();
+	// 			console.error(err);
+	// 			process.exit(1);
+	// 		}
 
-			var some = out
-				.split(/\r?\n/)
-				.filter(function (l) { return !!l; });
+	// 		var some = out
+	// 			.split(/\r?\n/)
+	// 			.filter(function (l) { return !!l; });
 
-			hygiene(some, { skipEOL: skipEOL }).on('error', function (err) {
-				console.error();
-				console.error(err);
-				process.exit(1);
-			});
-		});
-	});
+	// 		hygiene(some, { skipEOL: skipEOL }).on('error', function (err) {
+	// 			console.error();
+	// 			console.error(err);
+	// 			process.exit(1);
+	// 		});
+	// 	});
+	// });
 }
