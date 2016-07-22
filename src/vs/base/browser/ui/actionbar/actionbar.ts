@@ -209,6 +209,7 @@ export interface IActionItemOptions {
 	icon?: boolean;
 	label?: boolean;
 	keybinding?: string;
+	animated?: boolean;
 }
 
 export class ActionItem extends BaseActionItem {
@@ -520,6 +521,7 @@ export class ActionBar extends EventEmitter implements IActionRunner {
 				item = new ActionItem(this.context, action, options);
 			}
 
+			DOM.toggleClass(actionItemElement, 'animated', options.animated !== false);
 			item.actionRunner = this._actionRunner;
 			item.setActionContext(this.context);
 			this.addEmitter2(item);
@@ -761,5 +763,13 @@ export class SelectActionItem extends BaseActionItem {
 		this.toDispose = lifecycle.dispose(this.toDispose);
 
 		super.dispose();
+	}
+}
+
+export class HTMLElementContextActionItem extends ActionItem {
+	render(container: HTMLElement): void {
+		super.render(container);
+		DOM.toggleClass(container, 'animated', this.options.animated !== false);
+		this.setActionContext(container);
 	}
 }

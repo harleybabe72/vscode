@@ -18,6 +18,7 @@ import { domEvent } from 'vs/base/browser/event';
 import { StandardKeyboardEvent } from 'vs/base/browser/keyboardEvent';
 import { KeyCode } from 'vs/base/common/keyCodes';
 import { Viewlet } from 'vs/workbench/browser/viewlet';
+import { IActionItem, HTMLElementContextActionItem } from 'vs/base/browser/ui/actionbar/actionbar';
 import { append, emmet as $, addStandardDisposableListener, EventType, addClass, removeClass, toggleClass } from 'vs/base/browser/dom';
 import { IPager, PagedModel } from 'vs/base/common/paging';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
@@ -25,7 +26,7 @@ import { PagedList } from 'vs/base/browser/ui/list/listPaging';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { Delegate, Renderer } from './extensionsList';
 import { IExtensionsWorkbenchService, IExtension, IExtensionsViewlet, VIEWLET_ID } from './extensions';
-import { ShowRecommendedExtensionsAction, ShowPopularExtensionsAction, ShowInstalledExtensionsAction, ShowOutdatedExtensionsAction, ClearExtensionsInputAction } from './extensionsActions';
+import { ShowRecommendedExtensionsAction, ShowPopularExtensionsAction, ShowInstalledExtensionsAction, ShowOutdatedExtensionsAction, ClearExtensionsInputAction, ChangeSortingAction } from './extensionsActions';
 import { IExtensionManagementService, IExtensionGalleryService, SortBy } from 'vs/platform/extensionManagement/common/extensionManagement';
 import { ExtensionsInput } from './extensionsInput';
 import { IProgressService } from 'vs/platform/progress/common/progress';
@@ -128,7 +129,8 @@ export class ExtensionsViewlet extends Viewlet implements IExtensionsViewlet {
 	getActions(): IAction[] {
 		if (!this.primaryActions) {
 			this.primaryActions = [
-				this.instantiationService.createInstance(ClearExtensionsInputAction, ClearExtensionsInputAction.ID, ClearExtensionsInputAction.LABEL, this.onSearchChange)
+				this.instantiationService.createInstance(ClearExtensionsInputAction, ClearExtensionsInputAction.ID, ClearExtensionsInputAction.LABEL, this.onSearchChange),
+				this.instantiationService.createInstance(ChangeSortingAction)
 			];
 		}
 
@@ -146,6 +148,14 @@ export class ExtensionsViewlet extends Viewlet implements IExtensionsViewlet {
 		}
 
 		return this.secondaryActions;
+	}
+
+	getActionItem(action: IAction): IActionItem {
+		if (action instanceof ChangeSortingAction) {
+			return new HTMLElementContextActionItem(null, action, { icon: true, label: false, animated: false });
+		}
+
+		return super.getActionItem(action);
 	}
 
 	search(text: string, immediate = false): void {

@@ -6,7 +6,7 @@
 import 'vs/css!./media/extensionActions';
 import { localize } from 'vs/nls';
 import { TPromise } from 'vs/base/common/winjs.base';
-import { Action } from 'vs/base/common/actions';
+import { Action, IAction } from 'vs/base/common/actions';
 import severity from 'vs/base/common/severity';
 import Event from 'vs/base/common/event';
 import { IDisposable, dispose } from 'vs/base/common/lifecycle';
@@ -17,6 +17,7 @@ import { IMessageService, CloseAction } from 'vs/platform/message/common/message
 import { ToggleViewletAction } from 'vs/workbench/browser/viewlet';
 import { IViewletService } from 'vs/workbench/services/viewlet/common/viewletService';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
+import { IContextMenuService } from 'vs/platform/contextview/browser/contextview';
 
 export class InstallAction extends Action {
 
@@ -411,5 +412,32 @@ export class ShowRecommendedExtensionsAction extends Action {
 
 	protected isEnabled(): boolean {
 		return true;
+	}
+}
+
+export class ChangeSortingAction extends Action {
+
+	static ID = 'workbench.extensions.action.changeSortOrder';
+	static LABEL = localize('changeSorting', "Change Sorting");
+
+	constructor(
+		@IContextMenuService private contextMenuService: IContextMenuService
+	) {
+		super(ChangeSortingAction.ID, ChangeSortingAction.LABEL, 'octicon octicon-squirrel', true);
+	}
+
+	getActions(): TPromise<IAction[]> {
+		return TPromise.as([
+			// new Action('foo', 'hello', '', true, () => TPromise.as(alert('1')))
+		]);
+	}
+
+	run(anchor: HTMLElement): TPromise<void> {
+		this.contextMenuService.showContextMenu({
+			getAnchor: () => anchor,
+			getActions: () => this.getActions()
+		});
+
+		return TPromise.as(null);
 	}
 }
