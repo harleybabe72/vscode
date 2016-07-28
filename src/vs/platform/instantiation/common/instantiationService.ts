@@ -79,6 +79,10 @@ export class InstantiationService implements IInstantiationService {
 		}
 	}
 
+	render(param: any): void {
+
+	}
+
 	private _createInstanceAsync<T>(descriptor: AsyncDescriptor<T>, args: any[]): TPromise<T> {
 
 		let canceledError: Error;

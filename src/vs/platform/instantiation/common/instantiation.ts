@@ -186,6 +186,12 @@ function storeServiceDependency(id: Function, target: Function, index: number, o
 export function createDecorator<T>(serviceId: string): { (...args: any[]): void; type: T; } {
 
 	let id = function(target: Function, key: string, index: number): any {
+		if (serviceId === 'viewletService' && typeof target !== 'function') {
+			// TODO store `key` instead of `index`
+			debugger;
+			// console.log(target);
+		}
+
 		if (arguments.length !== 3) {
 			throw new Error('@IServiceName-decorator can only be used to decorate a parameter');
 		}

@@ -36,17 +36,22 @@ import WebView from 'vs/workbench/parts/html/browser/webview';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { render, Component } from 'jsx';
 
-export interface TitleProps {
+export interface HeaderProps {
 	onExtensionChange: Event<IExtension>;
 }
 
-export interface TitleState {
+export interface HeaderState {
 	extension: IExtension;
 }
 
-export class Title extends Component<TitleProps, TitleState> {
+export class Header extends Component<HeaderProps, HeaderState> {
+
+	@IViewletService private viewletService: IViewletService;
 
 	private disposables: IDisposable[] = [];
+	private get extension(): IExtension { return this.state.extension; }
+	private get extensionUrl(): string { return `${ product.extensionsGallery.itemUrl }?itemName=${ this.extension.publisher }.${ this.extension.name }`; }
+	private get extensionLicenseUrl(): string { return `${ product.extensionsGallery.itemUrl }/${ this.extension.publisher }.${ this.extension.name }/license`; }
 
 	componentDidMount() {
 		this.props.onExtensionChange(extension => this.setState({ extension }));
@@ -57,19 +62,60 @@ export class Title extends Component<TitleProps, TitleState> {
 	}
 
 	render() {
-		const { extension } = this.state;
-
-		if (!extension) {
+		if (!this.extension) {
 			return null;
 		}
 
-		const name = extension.displayName;
-		const url = product.extensionsGallery ? `${ product.extensionsGallery.itemUrl }?itemName=${ extension.publisher }.${ extension.name }` : null;
-		const onClick = url ? finalHandler(() => shell.openExternal(url)) : null;
-
-		return <div class='title'>
-			<a class='name' href='#' onClick={ onClick }>{ name }</a>
+		return <div class='header'>
+			<div class='icon' style={ `background-image: url("${ this.extension.iconUrl }");` } />
+			<div class='details'>
+				<div class='title'>
+					<a class='name' href='#' onclick={ () => this.onTitleClick() }>{ this.extension.displayName }</a>
+				</div>
+				<div class='subtitle'>
+					<a class='publisher' href='#' onclick={ () => this.onPublisherClick() }>{ this.extension.publisherDisplayName }</a>
+					<span class='install'></span>
+					<a class='rating' href='#' onclick={ () => this.onRatingClick() }></a>
+					<a class='license' href='#' onclick={ () => this.onLicenseClick() }>{ localize('license', 'License') }</a>
+				</div>
+				<div class='description'>{ this.extension.description }</div>
+				<div class='actions' />
+			</div>
 		</div>;
+	}
+
+	private onTitleClick(): void {
+		if (!this.extension || !product.extensionsGallery) {
+			return null;
+		}
+
+		shell.openExternal(this.extensionUrl);
+	}
+
+	private onPublisherClick(): void {
+		if (!this.extension || !product.extensionsGallery) {
+			return null;
+		}
+
+		this.viewletService.openViewlet(VIEWLET_ID, true)
+			.then(viewlet => viewlet as IExtensionsViewlet)
+			.done(viewlet => viewlet.search(`publisher:"${ this.extension.publisherDisplayName }"`, true));
+	}
+
+	private onRatingClick(): void {
+		if (!this.extension || !product.extensionsGallery) {
+			return null;
+		}
+
+		shell.openExternal(`${ this.extensionUrl }#review-details`);
+	}
+
+	private onLicenseClick(): void {
+		if (!this.extension || !product.extensionsGallery) {
+			return null;
+		}
+
+		shell.openExternal(this.extensionLicenseUrl);
 	}
 }
 
@@ -90,13 +136,6 @@ export class ExtensionEditor extends BaseEditor {
 
 	private onExtensionChange = new Emitter<IExtension>();
 
-	private icon: HTMLElement;
-	private license: HTMLAnchorElement;
-	private publisher: HTMLAnchorElement;
-	private installCount: HTMLElement;
-	private rating: HTMLAnchorElement;
-	private description: HTMLElement;
-	private actionBar: ActionBar;
 	private body: HTMLElement;
 
 	private _highlight: ITemplateData;
@@ -128,32 +167,9 @@ export class ExtensionEditor extends BaseEditor {
 		const container = parent.getHTMLElement();
 
 		const root = append(container, $('.extension-editor'));
-		const header = append(root, $('.header'));
-
-		this.icon = append(header, $('.icon'));
-
-		const details = append(header, $('.details'));
-		render(<Title onExtensionChange={ this.onExtensionChange.event } />, details);
-
-		const subtitle = append(details, $('.subtitle'));
-		this.publisher = append(subtitle, $<HTMLAnchorElement>('a.publisher'));
-		this.publisher.href = '#';
-
-		this.installCount = append(subtitle, $('span.install'));
-
-		this.rating = append(subtitle, $<HTMLAnchorElement>('a.rating'));
-		this.rating.href = '#';
-
-		this.license = append(subtitle, $<HTMLAnchorElement>('a.license'));
-		this.license.href = '#';
-		this.license.textContent = localize('license', 'License');
-
-		this.description = append(details, $('.description'));
-
-		const actions = append(details, $('.actions'));
-		this.actionBar = new ActionBar(actions, { animated: false });
-		this.disposables.push(this.actionBar);
-
+		const header = <Header onExtensionChange={ this.onExtensionChange.event } />;
+		console.log(header);
+		render(header, root);
 		this.body = append(root, $('.body'));
 	}
 
@@ -162,42 +178,23 @@ export class ExtensionEditor extends BaseEditor {
 
 		const extension = input.extension;
 
-		this.icon.style.backgroundImage = `url("${ extension.iconUrl }")`;
-		// this.name.textContent = extension.displayName;
-		this.publisher.textContent = extension.publisherDisplayName;
-		this.description.textContent = extension.description;
+		// const install = this.instantiationService.createInstance(InstallWidget, this.installCount, { extension });
+		// this.transientDisposables.push(install);
 
-		if (product.extensionsGallery) {
-			const extensionUrl = `${ product.extensionsGallery.itemUrl }?itemName=${ extension.publisher }.${ extension.name }`;
-			const licenseUrl = `${ product.extensionsGallery.itemUrl }/${ extension.publisher }.${ extension.name }/license`;
+		// const ratings = this.instantiationService.createInstance(RatingsWidget, this.rating, { extension });
+		// this.transientDisposables.push(ratings);
 
-			// this.name.onclick = finalHandler(() => shell.openExternal(extensionUrl));
-			this.license.onclick = finalHandler(() => shell.openExternal(licenseUrl));
-			this.rating.onclick = finalHandler(() => shell.openExternal(`${ extensionUrl }#review-details`));
-			this.publisher.onclick = finalHandler(() => {
-				this.viewletService.openViewlet(VIEWLET_ID, true)
-					.then(viewlet => viewlet as IExtensionsViewlet)
-					.done(viewlet => viewlet.search(`publisher:"${ extension.publisherDisplayName }"`, true));
-			});
-		}
+		// const installAction = this.instantiationService.createInstance(CombinedInstallAction);
+		// const updateAction = this.instantiationService.createInstance(UpdateAction);
+		// const enableAction = this.instantiationService.createInstance(EnableAction);
 
-		const install = this.instantiationService.createInstance(InstallWidget, this.installCount, { extension });
-		this.transientDisposables.push(install);
+		// installAction.extension = extension;
+		// updateAction.extension = extension;
+		// enableAction.extension = extension;
 
-		const ratings = this.instantiationService.createInstance(RatingsWidget, this.rating, { extension });
-		this.transientDisposables.push(ratings);
-
-		const installAction = this.instantiationService.createInstance(CombinedInstallAction);
-		const updateAction = this.instantiationService.createInstance(UpdateAction);
-		const enableAction = this.instantiationService.createInstance(EnableAction);
-
-		installAction.extension = extension;
-		updateAction.extension = extension;
-		enableAction.extension = extension;
-
-		this.actionBar.clear();
-		this.actionBar.push([enableAction, updateAction, installAction], { icon: true, label: true });
-		this.transientDisposables.push(enableAction, updateAction, installAction);
+		// this.actionBar.clear();
+		// this.actionBar.push([enableAction, updateAction, installAction], { icon: true, label: true });
+		// this.transientDisposables.push(enableAction, updateAction, installAction);
 
 		this.body.innerHTML = '';
 		let promise: TPromise<any> = super.setInput(input, options);
