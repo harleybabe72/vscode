@@ -3,7 +3,18 @@ declare namespace Preact {
 		props: P;
 	}
 
-	export class Component<P,S> {
+	interface ComponentLifecycle<P, S> {
+		componentWillMount?(): void;
+		componentDidMount?(): void;
+		componentWillUnmount?(): void;
+		componentDidUnmount?(): void;
+		componentWillReceiveProps?(nextProps: P, nextContext: any): void;
+		shouldComponentUpdate?(nextProps: P, nextState: S, nextContext: any): boolean;
+		componentWillUpdate?(nextProps: P, nextState: S, nextContext: any): void;
+		componentDidUpdate?(prevProps: P, prevState: S, prevContext: any): void;
+	}
+
+	export class Component<P,S> implements ComponentLifecycle<P,S> {
 		props: P;
 		state: S;
 		constructor(props?: P, context?: any);
