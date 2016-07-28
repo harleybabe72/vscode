@@ -7,6 +7,7 @@
 
 import 'vs/css!./media/extensionEditor';
 import { localize } from 'vs/nls';
+import Event, { Emitter } from 'vs/base/common/event';
 import { TPromise } from 'vs/base/common/winjs.base';
 import { marked } from 'vs/base/common/marked/marked';
 import { onUnexpectedError } from 'vs/base/common/errors';
@@ -22,7 +23,7 @@ import { IRequestService } from 'vs/platform/request/common/request';
 import { IExtensionGalleryService } from 'vs/platform/extensionManagement/common/extensionManagement';
 import { IThemeService } from 'vs/workbench/services/themes/common/themeService';
 import { ExtensionsInput } from './extensionsInput';
-import { IExtensionsWorkbenchService, IExtensionsViewlet, VIEWLET_ID } from './extensions';
+import { IExtensionsWorkbenchService, IExtensionsViewlet, VIEWLET_ID, IExtension } from './extensions';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { ITemplateData } from './extensionsList';
 import { RatingsWidget, InstallWidget } from './extensionsWidgets';
@@ -33,6 +34,44 @@ import { ActionBar } from 'vs/base/browser/ui/actionbar/actionbar';
 import { CombinedInstallAction, UpdateAction, EnableAction } from './extensionsActions';
 import WebView from 'vs/workbench/parts/html/browser/webview';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
+import { render, Component } from 'jsx';
+
+export interface TitleProps {
+	onExtensionChange: Event<IExtension>;
+}
+
+export interface TitleState {
+	extension: IExtension;
+}
+
+export class Title extends Component<TitleProps, TitleState> {
+
+	private disposables: IDisposable[] = [];
+
+	componentDidMount() {
+		this.props.onExtensionChange(extension => this.setState({ extension }));
+	}
+
+	componentWillUnmount() {
+		this.disposables = dispose(this.disposables);
+	}
+
+	render() {
+		const { extension } = this.state;
+
+		if (!extension) {
+			return null;
+		}
+
+		const name = extension.displayName;
+		const url = product.extensionsGallery ? `${ product.extensionsGallery.itemUrl }?itemName=${ extension.publisher }.${ extension.name }` : null;
+		const onClick = url ? finalHandler(() => shell.openExternal(url)) : null;
+
+		return <div class='title'>
+			<a class='name' href='#' onClick={ onClick }>{ name }</a>
+		</div>;
+	}
+}
 
 function renderBody(body: string): string {
 	return `<!DOCTYPE html>
@@ -49,8 +88,9 @@ export class ExtensionEditor extends BaseEditor {
 
 	static ID: string = 'workbench.editor.extension';
 
+	private onExtensionChange = new Emitter<IExtension>();
+
 	private icon: HTMLElement;
-	private name: HTMLAnchorElement;
 	private license: HTMLAnchorElement;
 	private publisher: HTMLAnchorElement;
 	private installCount: HTMLElement;
@@ -93,9 +133,7 @@ export class ExtensionEditor extends BaseEditor {
 		this.icon = append(header, $('.icon'));
 
 		const details = append(header, $('.details'));
-		const title = append(details, $('.title'));
-		this.name = append(title, $<HTMLAnchorElement>('a.name'));
-		this.name.href = '#';
+		render(<Title onExtensionChange={ this.onExtensionChange.event } />, details);
 
 		const subtitle = append(details, $('.subtitle'));
 		this.publisher = append(subtitle, $<HTMLAnchorElement>('a.publisher'));
@@ -125,7 +163,7 @@ export class ExtensionEditor extends BaseEditor {
 		const extension = input.extension;
 
 		this.icon.style.backgroundImage = `url("${ extension.iconUrl }")`;
-		this.name.textContent = extension.displayName;
+		// this.name.textContent = extension.displayName;
 		this.publisher.textContent = extension.publisherDisplayName;
 		this.description.textContent = extension.description;
 
@@ -133,7 +171,7 @@ export class ExtensionEditor extends BaseEditor {
 			const extensionUrl = `${ product.extensionsGallery.itemUrl }?itemName=${ extension.publisher }.${ extension.name }`;
 			const licenseUrl = `${ product.extensionsGallery.itemUrl }/${ extension.publisher }.${ extension.name }/license`;
 
-			this.name.onclick = finalHandler(() => shell.openExternal(extensionUrl));
+			// this.name.onclick = finalHandler(() => shell.openExternal(extensionUrl));
 			this.license.onclick = finalHandler(() => shell.openExternal(licenseUrl));
 			this.rating.onclick = finalHandler(() => shell.openExternal(`${ extensionUrl }#review-details`));
 			this.publisher.onclick = finalHandler(() => {
@@ -192,6 +230,8 @@ export class ExtensionEditor extends BaseEditor {
 		}
 
 		this.transientDisposables.push(toDisposable(() => promise.cancel()));
+
+		this.onExtensionChange.fire(extension);
 
 		return TPromise.as(null);
 	}
