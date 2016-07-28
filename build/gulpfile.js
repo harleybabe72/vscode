@@ -12,15 +12,15 @@ var assign = require('object-assign');
 var compilation = tsb.create(assign({ verbose: true }, require('./tsconfig.json').compilerOptions));
 
 gulp.task('compile', function() {
-	return gulp.src('**/*.ts', { base: '.' })
+	return gulp.src('**/*.{ts,tsx}', { base: '.' })
 		.pipe(compilation())
 		.pipe(gulp.dest(''));
 });
 
 gulp.task('watch', function() {
-	var src = gulp.src('**/*.ts', { base: '.' });
+	var src = gulp.src('**/*.{ts,tsx}', { base: '.' });
 
-	return watcher('**/*.ts', { base: '.' })
+	return watcher('**/*.{ts,tsx}', { base: '.' })
 		.pipe(util.incremental(compilation, src))
 		.pipe(gulp.dest(''));
 });

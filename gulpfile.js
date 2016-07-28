@@ -46,7 +46,7 @@ function createCompile(build, emitError) {
 
 	return function (token) {
 		const utf8Filter = util.filter(data => /(\/|\\)test(\/|\\).*utf8/.test(data.path));
-		const tsFilter = util.filter(data => /\.ts$/.test(data.path));
+		const tsFilter = util.filter(data => /\.tsx?$/.test(data.path));
 		const noDeclarationsFilter = util.filter(data => !(/\.d\.ts$/.test(data.path)));
 
 		const input = es.through();
