@@ -20,7 +20,7 @@ declare namespace Preact {
 		base: HTMLElement;
 		constructor(props?: P, context?: any);
 		setState(state: S, callback?: () => any): void;
-		render(props: P, state: S);
+		render(props: P, state: S): Element<P>;
 	}
 
 	export function h(tagName: string, props: any, ...children: Element<any>[]): Element<any>;
@@ -34,7 +34,7 @@ declare namespace JSX {
 }
 
 declare namespace React {
-	function createElement();
+	function createElement(tagName: string, props: any, ...children: Preact.Element<any>[]): Preact.Element<any>;
 }
 
 declare module 'preact' {

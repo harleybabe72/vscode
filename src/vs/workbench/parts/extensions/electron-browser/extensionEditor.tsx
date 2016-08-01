@@ -26,15 +26,16 @@ import { ExtensionsInput } from './extensionsInput';
 import { IExtensionsWorkbenchService, IExtensionsViewlet, VIEWLET_ID, IExtension } from './extensions';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { ITemplateData } from './extensionsList';
-import { RatingsWidget, InstallWidget } from './extensionsWidgets';
+import { RatingsWidget, InstallWidgetX } from './extensionsWidgets';
 import { EditorOptions } from 'vs/workbench/common/editor';
 import { shell } from 'electron';
 import product from 'vs/platform/product';
+import { IAction } from 'vs/base/common/actions';
 import { ActionBarX } from 'vs/base/browser/ui/actionbar/actionbar';
 import { CombinedInstallAction, UpdateAction, EnableAction } from './extensionsActions';
 import WebView from 'vs/workbench/parts/html/browser/webview';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
-import { render, Component } from 'jsx';
+import { render, Component, Element } from 'jsx';
 
 export interface HeaderProps {
 	onExtensionChange: Event<IExtension>;
@@ -48,37 +49,42 @@ export class Header extends Component<HeaderProps, HeaderState> {
 
 	@IInstantiationService private instantiationService: IInstantiationService;
 	@IViewletService private viewletService: IViewletService;
+	@IExtensionsWorkbenchService extensionsWorkbenchService: IExtensionsWorkbenchService;
 
 	private get extension(): IExtension { return this.state.extension; }
 	private get extensionUrl(): string { return `${ product.extensionsGallery.itemUrl }?itemName=${ this.extension.publisher }.${ this.extension.name }`; }
 	private get extensionLicenseUrl(): string { return `${ product.extensionsGallery.itemUrl }/${ this.extension.publisher }.${ this.extension.name }/license`; }
-	private installAction: CombinedInstallAction;
-	private updateAction: UpdateAction;
-	private enableAction: EnableAction;
+	private actions: IAction[];
+	private disposables: IDisposable[];
 
 	componentDidMount() {
-		this.installAction = this.instantiationService.createInstance(CombinedInstallAction);
-		this.updateAction = this.instantiationService.createInstance(UpdateAction);
-		this.enableAction = this.instantiationService.createInstance(EnableAction);
-		this.props.onExtensionChange(extension => this.setState({ extension }));
+		const installAction = this.instantiationService.createInstance(CombinedInstallAction);
+		const updateAction = this.instantiationService.createInstance(UpdateAction);
+		const enableAction = this.instantiationService.createInstance(EnableAction);
+
+		const extensionChangeListener = this.props.onExtensionChange(extension => {
+			installAction.extension = extension;
+			updateAction.extension = extension;
+			enableAction.extension = extension;
+			this.setState({ extension });
+		});
+
+		const extensionsChangeListener = this.extensionsWorkbenchService.onChange(() => {
+			this.setState({ extension: this.state.extension });
+		});
+
+		this.actions = [installAction, updateAction, enableAction];
+		this.disposables = [extensionChangeListener, extensionsChangeListener].concat(this.actions);
 	}
 
 	componentWillUnmount() {
-		this.installAction = dispose(this.installAction);
-		this.updateAction = dispose(this.updateAction);
-		this.enableAction = dispose(this.enableAction);
+		this.disposables = dispose(this.disposables);
 	}
 
-	render() {
+	render(): Element<HeaderProps> {
 		if (!this.extension) {
 			return null;
 		}
-
-		this.installAction.extension = this.extension;
-		this.updateAction.extension = this.extension;
-		this.enableAction.extension = this.extension;
-
-		const actions = [this.enableAction, this.updateAction, this.installAction];
 
 		return <div class='header'>
 			<div class='icon' style={ `background-image: url("${ this.extension.iconUrl }");` } />
@@ -88,13 +94,13 @@ export class Header extends Component<HeaderProps, HeaderState> {
 				</div>
 				<div class='subtitle'>
 					<a class='publisher' href='#' onclick={ () => this.onPublisherClick() }>{ this.extension.publisherDisplayName }</a>
-					<span class='install'></span>
+					<InstallWidgetX extension={ this.extension } />
 					<a class='rating' href='#' onclick={ () => this.onRatingClick() }></a>
 					<a class='license' href='#' onclick={ () => this.onLicenseClick() }>{ localize('license', 'License') }</a>
 				</div>
 				<div class='description'>{ this.extension.description }</div>
 				<div class='actions'>
-					<ActionBarX actions={ actions } actionOptions={{ icon: true, label: true }} />
+					<ActionBarX actions={ this.actions } actionOptions={{ icon: true, label: true }} />
 				</div>
 			</div>
 		</div>;

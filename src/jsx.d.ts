@@ -5,7 +5,7 @@
 
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { render, Element as PreactElement } from 'preact';
-export { Component } from 'preact';
+export { Component, Element } from 'preact';
 
 /**
  * Custom render function which allows for field service injection.
