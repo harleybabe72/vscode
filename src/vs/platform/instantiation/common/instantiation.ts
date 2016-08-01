@@ -15,7 +15,11 @@ export namespace _util {
 	export const DI_TARGET = '$di$target';
 	export const DI_DEPENDENCIES = '$di$dependencies';
 
-	export function getServiceDependencies(ctor: any): { id: ServiceIdentifier<any>, index: number, optional: boolean }[] {
+	export function getParameterServiceDependencies(ctor: any): { id: ServiceIdentifier<any>, index: number, optional: boolean }[] {
+		return ctor[DI_DEPENDENCIES] || [];
+	}
+
+	export function getFieldServiceDependencies(ctor: any): { id: ServiceIdentifier<any>, key: number, optional: boolean }[] {
 		return ctor[DI_DEPENDENCIES] || [];
 	}
 }
@@ -171,11 +175,20 @@ export interface ServiceIdentifier<T> {
 	type: T;
 }
 
-function storeServiceDependency(id: Function, target: Function, index: number, optional: boolean): void {
+function storeParameterServiceDependency(id: Function, target: Function, index: number, optional: boolean): void {
 	if (target[_util.DI_TARGET] === target) {
 		target[_util.DI_DEPENDENCIES].push({ id, index, optional });
 	} else {
 		target[_util.DI_DEPENDENCIES] = [{ id, index, optional }];
+		target[_util.DI_TARGET] = target;
+	}
+}
+
+function storeFieldServiceDependency(id: Function, target: Function, key: string, optional: boolean): void {
+	if (target[_util.DI_TARGET] === target) {
+		target[_util.DI_DEPENDENCIES].push({ id, key, optional });
+	} else {
+		target[_util.DI_DEPENDENCIES] = [{ id, key, optional }];
 		target[_util.DI_TARGET] = target;
 	}
 }
@@ -186,16 +199,22 @@ function storeServiceDependency(id: Function, target: Function, index: number, o
 export function createDecorator<T>(serviceId: string): { (...args: any[]): void; type: T; } {
 
 	let id = function(target: Function, key: string, index: number): any {
-		if (serviceId === 'viewletService' && typeof target !== 'function') {
-			// TODO store `key` instead of `index`
-			debugger;
-			// console.log(target);
-		}
 
 		if (arguments.length !== 3) {
 			throw new Error('@IServiceName-decorator can only be used to decorate a parameter');
 		}
-		storeServiceDependency(id, target, index, false);
+
+		if (typeof target === 'function' && typeof key === 'undefined' && typeof index === 'number') {
+			storeParameterServiceDependency(id, target, index, false);
+			return;
+		}
+
+		if (typeof target === 'object' && typeof key === 'string' && typeof index === 'undefined') {
+			storeFieldServiceDependency(id, target, key, false);
+			return;
+		}
+
+		throw new Error('Invalid @IServiceName-decorator usage');
 	};
 
 	id.toString = () => serviceId;
@@ -212,6 +231,6 @@ export function optional<T>(serviceIdentifier: ServiceIdentifier<T>) {
 		if (arguments.length !== 3) {
 			throw new Error('@optional-decorator can only be used to decorate a parameter');
 		}
-		storeServiceDependency(serviceIdentifier, target, index, true);
+		storeParameterServiceDependency(serviceIdentifier, target, index, true);
 	};
 }

@@ -5,19 +5,34 @@
 
 /*global define,window*/
 
+function isFunctionalComponent(vnode) {
+	let nodeName = vnode && vnode.nodeName;
+	return nodeName && typeof nodeName === 'function' && !(nodeName.prototype && nodeName.prototype.render);
+}
+
 define(['preact'], preact => {
 	const createElement = preact.h;
 	window.React = { createElement };
 
 	const _render = preact.render;
 
-	function render(element, container, injectionService) {
-		const result = _render(element, container);
-		const component = result._component;
+	function render(vnode, container, instantiationService) {
+		if (vnode && !isFunctionalComponent(vnode) && typeof vnode !== 'string' && typeof vnode.nodeName === 'function') {
+			const ctor = vnode.nodeName;
+			const instantiate = (...args) => {
+				const inst = new ctor(...args);
 
-		// TODO: inject component
+				// TODO@joao should this just be ctor injection?
+				instantiationService.inject(inst);
+				return inst;
+			};
 
-		return result;
+			function Ctor(...args) { return instantiate(...args); }
+			Ctor.prototype.render = () => null;
+			vnode.nodeName = Ctor;
+		}
+
+		return _render(vnode, container);
 	}
 
 	return {

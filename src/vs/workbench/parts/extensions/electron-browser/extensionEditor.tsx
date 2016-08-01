@@ -54,6 +54,7 @@ export class Header extends Component<HeaderProps, HeaderState> {
 	private get extensionLicenseUrl(): string { return `${ product.extensionsGallery.itemUrl }/${ this.extension.publisher }.${ this.extension.name }/license`; }
 
 	componentDidMount() {
+		console.log(this.viewletService);
 		this.props.onExtensionChange(extension => this.setState({ extension }));
 	}
 
@@ -168,8 +169,8 @@ export class ExtensionEditor extends BaseEditor {
 
 		const root = append(container, $('.extension-editor'));
 		const header = <Header onExtensionChange={ this.onExtensionChange.event } />;
-		console.log(header);
-		render(header, root);
+		render(header, root, this.instantiationService);
+
 		this.body = append(root, $('.body'));
 	}
 

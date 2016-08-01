@@ -1,4 +1,4 @@
-declare namespace Preact {
+declare module 'preact' {
 	export class Element<P> {
 		props: P;
 	}
@@ -26,16 +26,7 @@ declare namespace Preact {
 	export function render(element: Element<any>, container: HTMLElement);
 }
 
-declare namespace JSX {
-	interface Element extends Preact.Element<any> {}
-	interface ElementClass extends Preact.Component<any, any> {}
-	interface ElementAttributesProperty { props; }
-}
-
+// This is necessary to get TSX working
 declare namespace React {
 	function createElement();
-}
-
-declare module 'preact' {
-	 export = Preact;
 }
