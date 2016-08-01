@@ -26,7 +26,7 @@ import { ExtensionsInput } from './extensionsInput';
 import { IExtensionsWorkbenchService, IExtensionsViewlet, VIEWLET_ID, IExtension } from './extensions';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { ITemplateData } from './extensionsList';
-import { RatingsWidget, InstallWidgetX } from './extensionsWidgets';
+import { RatingWidgetX, InstallWidgetX } from './extensionsWidgets';
 import { EditorOptions } from 'vs/workbench/common/editor';
 import { shell } from 'electron';
 import product from 'vs/platform/product';
@@ -95,7 +95,7 @@ export class Header extends Component<HeaderProps, HeaderState> {
 				<div class='subtitle'>
 					<a class='publisher' href='#' onclick={ () => this.onPublisherClick() }>{ this.extension.publisherDisplayName }</a>
 					<InstallWidgetX extension={ this.extension } />
-					<a class='rating' href='#' onclick={ () => this.onRatingClick() }></a>
+					<RatingWidgetX extension={ this.extension } onClick={ () => this.onRatingClick() } />
 					<a class='license' href='#' onclick={ () => this.onLicenseClick() }>{ localize('license', 'License') }</a>
 				</div>
 				<div class='description'>{ this.extension.description }</div>

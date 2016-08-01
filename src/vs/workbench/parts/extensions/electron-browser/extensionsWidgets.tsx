@@ -185,3 +185,49 @@ export class RatingsWidget implements IDisposable {
 		this.disposables = dispose(this.disposables);
 	}
 }
+
+export interface RatingWidgetProps {
+	extension: IExtension;
+	onClick?: Function;
+	small?: boolean;
+}
+
+export class RatingWidgetX extends Component<RatingWidgetProps,void> {
+
+	render(): Element<RatingWidgetProps> {
+		const { rating, ratingCount } = this.props.extension;
+
+		if (rating === null) {
+			return;
+		}
+
+		const roundedRating = Math.round(rating * 2) / 2;
+
+		if (this.props.small && ratingCount === 0) {
+			return;
+		}
+
+		const stars = [];
+
+		if (this.props.small) {
+			stars.push(<span class='full star' />);
+		} else {
+			for (let i = 1; i <= 5; i++) {
+				if (roundedRating >= i) {
+					stars.push(<span class='full star' />);
+				} else if (roundedRating >= i - 0.5) {
+					stars.push(<span class='half star' />);
+				} else {
+					stars.push(<span class='empty star' />);
+				}
+			}
+		}
+
+		return <a class='rating extension-ratings' href='#' onclick={ this.props.onClick }>
+			{ stars }
+			<span class='count'>
+				{ String(this.props.small ? roundedRating : ratingCount) }
+			</span>
+		</a>;
+	}
+}
