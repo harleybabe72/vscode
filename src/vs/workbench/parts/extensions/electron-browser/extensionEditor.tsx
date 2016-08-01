@@ -13,7 +13,7 @@ import { marked } from 'vs/base/common/marked/marked';
 import { onUnexpectedError } from 'vs/base/common/errors';
 import { IDisposable, empty, dispose, toDisposable } from 'vs/base/common/lifecycle';
 import { Builder } from 'vs/base/browser/builder';
-import { append, emmet as $, addClass, removeClass, finalHandler } from 'vs/base/browser/dom';
+import { append, emmet as $, addClass, removeClass } from 'vs/base/browser/dom';
 import { BaseEditor } from 'vs/workbench/browser/parts/editor/baseEditor';
 import { IViewlet } from 'vs/workbench/common/viewlet';
 import { IViewletService } from 'vs/workbench/services/viewlet/common/viewletService';
@@ -49,18 +49,24 @@ export class Header extends Component<HeaderProps, HeaderState> {
 	@IInstantiationService private instantiationService: IInstantiationService;
 	@IViewletService private viewletService: IViewletService;
 
-	private disposables: IDisposable[] = [];
 	private get extension(): IExtension { return this.state.extension; }
 	private get extensionUrl(): string { return `${ product.extensionsGallery.itemUrl }?itemName=${ this.extension.publisher }.${ this.extension.name }`; }
 	private get extensionLicenseUrl(): string { return `${ product.extensionsGallery.itemUrl }/${ this.extension.publisher }.${ this.extension.name }/license`; }
+	private installAction: CombinedInstallAction;
+	private updateAction: UpdateAction;
+	private enableAction: EnableAction;
 
 	componentDidMount() {
-		console.log(this.viewletService);
+		this.installAction = this.instantiationService.createInstance(CombinedInstallAction);
+		this.updateAction = this.instantiationService.createInstance(UpdateAction);
+		this.enableAction = this.instantiationService.createInstance(EnableAction);
 		this.props.onExtensionChange(extension => this.setState({ extension }));
 	}
 
 	componentWillUnmount() {
-		this.disposables = dispose(this.disposables);
+		this.installAction = dispose(this.installAction);
+		this.updateAction = dispose(this.updateAction);
+		this.enableAction = dispose(this.enableAction);
 	}
 
 	render() {
@@ -68,15 +74,11 @@ export class Header extends Component<HeaderProps, HeaderState> {
 			return null;
 		}
 
-		const installAction = this.instantiationService.createInstance(CombinedInstallAction);
-		const updateAction = this.instantiationService.createInstance(UpdateAction);
-		const enableAction = this.instantiationService.createInstance(EnableAction);
+		this.installAction.extension = this.extension;
+		this.updateAction.extension = this.extension;
+		this.enableAction.extension = this.extension;
 
-		installAction.extension = this.extension;
-		updateAction.extension = this.extension;
-		enableAction.extension = this.extension;
-
-		const actions = [enableAction, updateAction, installAction];
+		const actions = [this.enableAction, this.updateAction, this.installAction];
 
 		return <div class='header'>
 			<div class='icon' style={ `background-image: url("${ this.extension.iconUrl }");` } />
@@ -92,7 +94,7 @@ export class Header extends Component<HeaderProps, HeaderState> {
 				</div>
 				<div class='description'>{ this.extension.description }</div>
 				<div class='actions'>
-					<ActionBarX actions={ actions } />
+					<ActionBarX actions={ actions } actionOptions={{ icon: true, label: true }} />
 				</div>
 			</div>
 		</div>;
@@ -197,18 +199,6 @@ export class ExtensionEditor extends BaseEditor {
 
 		// const ratings = this.instantiationService.createInstance(RatingsWidget, this.rating, { extension });
 		// this.transientDisposables.push(ratings);
-
-		// const installAction = this.instantiationService.createInstance(CombinedInstallAction);
-		// const updateAction = this.instantiationService.createInstance(UpdateAction);
-		// const enableAction = this.instantiationService.createInstance(EnableAction);
-
-		// installAction.extension = extension;
-		// updateAction.extension = extension;
-		// enableAction.extension = extension;
-
-		// this.actionBar.clear();
-		// this.actionBar.push([enableAction, updateAction, installAction], { icon: true, label: true });
-		// this.transientDisposables.push(enableAction, updateAction, installAction);
 
 		this.body.innerHTML = '';
 		let promise: TPromise<any> = super.setInput(input, options);

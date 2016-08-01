@@ -766,6 +766,7 @@ export class SelectActionItem extends BaseActionItem {
 export interface IActionBarProps {
 	actions: IAction[];
 	options?: IActionBarOptions;
+	actionOptions?: IActionOptions;
 }
 
 export class ActionBarX extends Component<IActionBarProps, void> {
@@ -776,9 +777,14 @@ export class ActionBarX extends Component<IActionBarProps, void> {
 		return false;
 	}
 
+	componentWillReceiveProps(props: IActionBarProps) {
+		this.actionbar.clear();
+		this.actionbar.push(this.props.actions, this.props.actionOptions);
+	}
+
 	componentDidMount() {
 		this.actionbar = new ActionBar(this.base, this.props.options);
-		this.actionbar.push(this.props.actions, { icon: true, label: true });
+		this.actionbar.push(this.props.actions, this.props.actionOptions);
 	}
 
 	componentWillUnmount() {
