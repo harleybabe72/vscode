@@ -4,16 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
-import { render, Component, Element as PreactElement } from 'preact';
-
-// TSX configuration
-declare namespace JSX {
-	interface Element extends PreactElement<any> {}
-	interface ElementClass extends Component<any, any> {}
-	interface ElementAttributesProperty { props; }
-}
-
-export * from 'preact';
+import { render, Element as PreactElement } from 'preact';
+export { Component } from 'preact';
 
 /**
  * Custom render function which allows for field service injection.
