@@ -19,6 +19,7 @@ import {IEventEmitter, EventEmitter} from 'vs/base/common/eventEmitter';
 import {Gesture, EventType} from 'vs/base/browser/touch';
 import {StandardKeyboardEvent} from 'vs/base/browser/keyboardEvent';
 import {CommonKeybindings} from 'vs/base/common/keyCodes';
+import {Component} from 'jsx';
 
 export interface IActionItem extends IEventEmitter {
 	actionRunner: IActionRunner;
@@ -617,15 +618,13 @@ export class ActionBar extends EventEmitter implements IActionRunner {
 		for (let i = 0; i < this.items.length; i++) {
 			let item = this.items[i];
 
-			let actionItem = <any>item;
-
 			if (i === this.focusedItem) {
-				if (types.isFunction(actionItem.focus)) {
-					actionItem.focus();
+				if (types.isFunction(item.focus)) {
+					item.focus();
 				}
 			} else {
-				if (types.isFunction(actionItem.blur)) {
-					actionItem.blur();
+				if (types.isFunction(item.blur)) {
+					item.blur();
 				}
 			}
 		}
@@ -637,14 +636,14 @@ export class ActionBar extends EventEmitter implements IActionRunner {
 		}
 
 		// trigger action
-		let actionItem = (<BaseActionItem>this.items[this.focusedItem]);
+		let actionItem = this.items[this.focusedItem] as BaseActionItem;
 		const context = (actionItem._context === null || actionItem._context === undefined) ? event : actionItem._context;
 		this.run(actionItem._action, context).done();
 	}
 
 	private cancel(): void {
 		if (document.activeElement instanceof HTMLElement) {
-			(<HTMLElement>document.activeElement).blur(); // remove focus from focussed action
+			(document.activeElement as HTMLElement).blur(); // remove focus from focussed action
 		}
 
 		this.emit(CommonEventType.CANCEL);
@@ -761,5 +760,33 @@ export class SelectActionItem extends BaseActionItem {
 		this.toDispose = lifecycle.dispose(this.toDispose);
 
 		super.dispose();
+	}
+}
+
+export interface IActionBarProps {
+	actions: IAction[];
+	options?: IActionBarOptions;
+}
+
+export class ActionBarX extends Component<IActionBarProps, void> {
+
+	private actionbar: ActionBar;
+
+	shouldComponentUpdate() {
+		return false;
+	}
+
+	componentDidMount() {
+		this.actionbar = new ActionBar(this.base, this.props.options);
+		this.actionbar.push(this.props.actions, { icon: true, label: true });
+	}
+
+	componentWillUnmount() {
+		this.actionbar = lifecycle.dispose(this.actionbar);
+		lifecycle.dispose(this.props.actions);
+	}
+
+	render() {
+		return <div class='actionbarx' />;
 	}
 }

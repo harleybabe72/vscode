@@ -30,7 +30,7 @@ import { RatingsWidget, InstallWidget } from './extensionsWidgets';
 import { EditorOptions } from 'vs/workbench/common/editor';
 import { shell } from 'electron';
 import product from 'vs/platform/product';
-import { ActionBar } from 'vs/base/browser/ui/actionbar/actionbar';
+import { ActionBarX } from 'vs/base/browser/ui/actionbar/actionbar';
 import { CombinedInstallAction, UpdateAction, EnableAction } from './extensionsActions';
 import WebView from 'vs/workbench/parts/html/browser/webview';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
@@ -46,6 +46,7 @@ export interface HeaderState {
 
 export class Header extends Component<HeaderProps, HeaderState> {
 
+	@IInstantiationService private instantiationService: IInstantiationService;
 	@IViewletService private viewletService: IViewletService;
 
 	private disposables: IDisposable[] = [];
@@ -67,6 +68,16 @@ export class Header extends Component<HeaderProps, HeaderState> {
 			return null;
 		}
 
+		const installAction = this.instantiationService.createInstance(CombinedInstallAction);
+		const updateAction = this.instantiationService.createInstance(UpdateAction);
+		const enableAction = this.instantiationService.createInstance(EnableAction);
+
+		installAction.extension = this.extension;
+		updateAction.extension = this.extension;
+		enableAction.extension = this.extension;
+
+		const actions = [enableAction, updateAction, installAction];
+
 		return <div class='header'>
 			<div class='icon' style={ `background-image: url("${ this.extension.iconUrl }");` } />
 			<div class='details'>
@@ -80,7 +91,9 @@ export class Header extends Component<HeaderProps, HeaderState> {
 					<a class='license' href='#' onclick={ () => this.onLicenseClick() }>{ localize('license', 'License') }</a>
 				</div>
 				<div class='description'>{ this.extension.description }</div>
-				<div class='actions' />
+				<div class='actions'>
+					<ActionBarX actions={ actions } />
+				</div>
 			</div>
 		</div>;
 	}

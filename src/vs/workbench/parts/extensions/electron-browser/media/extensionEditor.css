@@ -82,15 +82,15 @@
 	margin-top: 14px;
 }
 
-.extension-editor > .header > .details > .actions > .monaco-action-bar {
+.extension-editor > .header > .details > .actions > .actionbarx > .monaco-action-bar {
 	text-align: initial;
 }
 
-.extension-editor > .header > .details > .actions > .monaco-action-bar > .actions-container {
+.extension-editor > .header > .details > .actions > .actionbarx > .monaco-action-bar > .actions-container {
 	justify-content: flex-start;
 }
 
-.extension-editor > .header > .details > .actions > .monaco-action-bar > .actions-container > .action-item > .action-label {
+.extension-editor > .header > .details > .actions > .actionbarx > .monaco-action-bar > .actions-container > .action-item > .action-label {
 	font-weight: 600;
 	padding: 1px 6px;
 	line-height: 15px;

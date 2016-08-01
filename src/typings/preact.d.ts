@@ -17,6 +17,7 @@ declare namespace Preact {
 	export class Component<P,S> implements ComponentLifecycle<P,S> {
 		props: P;
 		state: S;
+		base: HTMLElement;
 		constructor(props?: P, context?: any);
 		setState(state: S, callback?: () => any): void;
 		render(props: P, state: S);
