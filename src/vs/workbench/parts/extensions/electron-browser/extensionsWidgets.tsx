@@ -92,35 +92,29 @@ export class InstallWidget implements IDisposable {
 	}
 }
 
-export interface InstallWidgetProps {
-	extension: IExtension;
-	small?: boolean;
-}
+export type InstallWidgetProps = { extension: IExtension; small?: boolean; };
 
-export class InstallWidgetX extends Component<InstallWidgetProps,void> {
+export function InstallWidgetX({ extension, small }: InstallWidgetProps): Element<InstallWidgetProps> {
+	const installCount = extension.installCount;
 
-	render(): Element<InstallWidgetProps> {
-		const installCount = this.props.extension.installCount;
-
-		if (installCount === null) {
-			return;
-		}
-
-		let installLabel: string;
-
-		if (this.props.small) {
-			if (installCount > 1000000) {
-				installLabel = `${ Math.floor(installCount / 1000000) }M`;
-			} else if (installCount > 1000) {
-				installLabel = `${ Math.floor(installCount / 1000) }K`;
-			}
-		}
-
-		return <span class='install extension-install-count'>
-			<span class='octicon octicon-cloud-download' />
-			<span class='count'>{ installLabel || String(installCount) }</span>
-		</span>;
+	if (installCount === null) {
+		return;
 	}
+
+	let installLabel: string;
+
+	if (small) {
+		if (installCount > 1000000) {
+			installLabel = `${ Math.floor(installCount / 1000000) }M`;
+		} else if (installCount > 1000) {
+			installLabel = `${ Math.floor(installCount / 1000) }K`;
+		}
+	}
+
+	return <span class='install extension-install-count'>
+		<span class='octicon octicon-cloud-download' />
+		<span class='count'>{ installLabel || String(installCount) }</span>
+	</span>;
 }
 
 export class RatingsWidget implements IDisposable {
@@ -186,48 +180,41 @@ export class RatingsWidget implements IDisposable {
 	}
 }
 
-export interface RatingWidgetProps {
-	extension: IExtension;
-	onClick?: Function;
-	small?: boolean;
-}
+export type RatingWidgetProps = { extension: IExtension; onClick?: Function; small?: boolean; };
 
-export class RatingWidgetX extends Component<RatingWidgetProps,void> {
+export function RatingWidgetX({ extension, onClick, small }: RatingWidgetProps) : Element<RatingWidgetProps> {
+	const { rating, ratingCount } = extension;
 
-	render(): Element<RatingWidgetProps> {
-		const { rating, ratingCount } = this.props.extension;
+	if (rating === null) {
+		return;
+	}
 
-		if (rating === null) {
-			return;
-		}
+	const roundedRating = Math.round(rating * 2) / 2;
 
-		const roundedRating = Math.round(rating * 2) / 2;
+	if (small && ratingCount === 0) {
+		return;
+	}
 
-		if (this.props.small && ratingCount === 0) {
-			return;
-		}
+	const stars = [];
 
-		const stars = [];
-
-		if (this.props.small) {
-			stars.push(<span class='full star' />);
-		} else {
-			for (let i = 1; i <= 5; i++) {
-				if (roundedRating >= i) {
-					stars.push(<span class='full star' />);
-				} else if (roundedRating >= i - 0.5) {
-					stars.push(<span class='half star' />);
-				} else {
-					stars.push(<span class='empty star' />);
-				}
+	if (small) {
+		stars.push(<span class='full star' />);
+	} else {
+		for (let i = 1; i <= 5; i++) {
+			if (roundedRating >= i) {
+				stars.push(<span class='full star' />);
+			} else if (roundedRating >= i - 0.5) {
+				stars.push(<span class='half star' />);
+			} else {
+				stars.push(<span class='empty star' />);
 			}
 		}
-
-		return <a class='rating extension-ratings' href='#' onclick={ this.props.onClick }>
-			{ stars }
-			<span class='count'>
-				{ String(this.props.small ? roundedRating : ratingCount) }
-			</span>
-		</a>;
 	}
+
+	return <a class='rating extension-ratings' href='#' onclick={ onClick }>
+		{ stars }
+		<span class='count'>
+			{ String(small ? roundedRating : ratingCount) }
+		</span>
+	</a>;
 }
