@@ -6,7 +6,8 @@
 	"rules": {
 		"no-console": 0,
 		"no-cond-assign": 0,
-		"no-unused-vars": 1
+		"no-unused-vars": 1,
+		"no-inner-declarations": 0
 	},
 	"extends": "eslint:recommended"
 }
