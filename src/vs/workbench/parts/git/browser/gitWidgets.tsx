@@ -142,7 +142,8 @@ export class GitStatusbarItem implements IStatusbarItem {
 	constructor(@IInstantiationService private instantiationService: IInstantiationService) {}
 
 	render(container: HTMLElement): IDisposable {
-		render(<GitStatusbarItemX />, container, this.instantiationService);
-		return { dispose: () => render(null, container) };
+		// render(<GitStatusbarItemX />, container);
+		// return { dispose: () => render(null, container) };
+		return null;
 	}
 }

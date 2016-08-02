@@ -11,7 +11,8 @@ import Event, { Emitter } from 'vs/base/common/event';
 import { TPromise } from 'vs/base/common/winjs.base';
 import { marked } from 'vs/base/common/marked/marked';
 import { onUnexpectedError } from 'vs/base/common/errors';
-import { IDisposable, empty, dispose, toDisposable } from 'vs/base/common/lifecycle';
+import { autobind, memoize } from 'vs/base/common/decorators';
+import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { Builder } from 'vs/base/browser/builder';
 import { append, emmet as $, addClass, removeClass } from 'vs/base/browser/dom';
 import { BaseEditor } from 'vs/workbench/browser/parts/editor/baseEditor';
@@ -25,80 +26,70 @@ import { IThemeService } from 'vs/workbench/services/themes/common/themeService'
 import { ExtensionsInput } from './extensionsInput';
 import { IExtensionsWorkbenchService, IExtensionsViewlet, VIEWLET_ID, IExtension } from './extensions';
 import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
-import { ITemplateData } from './extensionsList';
 import { RatingWidgetX, InstallWidgetX } from './extensionsWidgets';
 import { EditorOptions } from 'vs/workbench/common/editor';
 import { shell } from 'electron';
 import product from 'vs/platform/product';
-import { IAction } from 'vs/base/common/actions';
 import { ActionBarX } from 'vs/base/browser/ui/actionbar/actionbar';
 import { CombinedInstallAction, UpdateAction, EnableAction } from './extensionsActions';
 import WebView from 'vs/workbench/parts/html/browser/webview';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { render, Component, Element } from 'jsx';
 
-export interface HeaderProps {
-	onExtensionChange: Event<IExtension>;
+function getExtensionUrl(extension: IExtension): string {
+	return `${ product.extensionsGallery.itemUrl }?itemName=${ extension.publisher }.${ extension.name }`;
 }
 
-export interface HeaderState {
+function getExtensionLicenseUrl(extension: IExtension): string {
+	return `${ product.extensionsGallery.itemUrl }/${ extension.publisher }.${ extension.name }/license`;
+}
+
+export interface HeaderServices {
+	instantiationService: IInstantiationService;
+	viewletService: IViewletService;
+}
+
+export interface HeaderProps extends HeaderServices {
 	extension: IExtension;
 }
 
-export class Header extends Component<HeaderProps, HeaderState> {
+export class Header extends Component<HeaderProps, void> {
 
-	@IInstantiationService private instantiationService: IInstantiationService;
-	@IViewletService private viewletService: IViewletService;
-	@IExtensionsWorkbenchService extensionsWorkbenchService: IExtensionsWorkbenchService;
-
-	private get extension(): IExtension { return this.state.extension; }
-	private get extensionUrl(): string { return `${ product.extensionsGallery.itemUrl }?itemName=${ this.extension.publisher }.${ this.extension.name }`; }
-	private get extensionLicenseUrl(): string { return `${ product.extensionsGallery.itemUrl }/${ this.extension.publisher }.${ this.extension.name }/license`; }
-	private actions: IAction[];
-	private disposables: IDisposable[];
+	@memoize
+	private get actions(): (CombinedInstallAction | UpdateAction | EnableAction)[] {
+		return [
+			this.props.instantiationService.createInstance(CombinedInstallAction),
+			this.props.instantiationService.createInstance(UpdateAction),
+			this.props.instantiationService.createInstance(EnableAction)
+		];
+	}
 
 	componentDidMount() {
-		const installAction = this.instantiationService.createInstance(CombinedInstallAction);
-		const updateAction = this.instantiationService.createInstance(UpdateAction);
-		const enableAction = this.instantiationService.createInstance(EnableAction);
+		this.actions.forEach(a => a.extension = this.props.extension);
+	}
 
-		const extensionChangeListener = this.props.onExtensionChange(extension => {
-			installAction.extension = extension;
-			updateAction.extension = extension;
-			enableAction.extension = extension;
-			this.setState({ extension });
-		});
-
-		const extensionsChangeListener = this.extensionsWorkbenchService.onChange(() => {
-			this.setState({ extension: this.state.extension });
-		});
-
-		this.actions = [installAction, updateAction, enableAction];
-		this.disposables = [extensionChangeListener, extensionsChangeListener].concat(this.actions);
+	componentWillReceiveProps({ extension }: HeaderProps): void {
+		this.actions.forEach(a => a.extension = extension);
 	}
 
 	componentWillUnmount() {
-		this.disposables = dispose(this.disposables);
+		dispose(this.actions);
 	}
 
 	render(): Element<HeaderProps> {
-		if (!this.extension) {
-			return null;
-		}
-
 		return <div class='header'>
-			<div class='icon' style={ `background-image: url("${ this.extension.iconUrl }");` } />
+			<div class='icon' style={ `background-image: url("${ this.props.extension.iconUrl }");` } />
 			<div class='details'>
 				<div class='title'>
-					<a class='name' href='#' onclick={ () => this.onTitleClick() }>{ this.extension.displayName }</a>
+					<a class='name' href='#' onclick={ this.onTitleClick }>{ this.props.extension.displayName }</a>
 				</div>
 				<div class='subtitle'>
-					<a class='publisher' href='#' onclick={ () => this.onPublisherClick() }>{ this.extension.publisherDisplayName }</a>
-					<InstallWidgetX extension={ this.extension } />
-					<RatingWidgetX extension={ this.extension } onClick={ () => this.onRatingClick() } />
-					<a class='license' href='#' onclick={ () => this.onLicenseClick() }>{ localize('license', 'License') }</a>
+					<a class='publisher' href='#' onclick={ this.onPublisherClick }>{ this.props.extension.publisherDisplayName }</a>
+					<InstallWidgetX extension={ this.props.extension } />
+					<RatingWidgetX extension={ this.props.extension } onClick={ this.onRatingClick } />
+					<a class='license' href='#' onclick={ this.onLicenseClick }>{ localize('license', 'License') }</a>
 				</div>
-				<div class='description'>{ this.extension.description }</div>
+				<div class='description'>{ this.props.extension.description }</div>
 				<div class='actions'>
 					<ActionBarX actions={ this.actions } options={{ animated: false }} actionOptions={{ icon: true, label: true }} />
 				</div>
@@ -106,38 +97,42 @@ export class Header extends Component<HeaderProps, HeaderState> {
 		</div>;
 	}
 
+	@autobind
 	private onTitleClick(): void {
-		if (!this.extension || !product.extensionsGallery) {
+		if (!this.props.extension || !product.extensionsGallery) {
 			return null;
 		}
 
-		shell.openExternal(this.extensionUrl);
+		shell.openExternal(getExtensionUrl(this.props.extension));
 	}
 
+	@autobind
 	private onPublisherClick(): void {
-		if (!this.extension || !product.extensionsGallery) {
+		if (!this.props.extension || !product.extensionsGallery) {
 			return null;
 		}
 
-		this.viewletService.openViewlet(VIEWLET_ID, true)
+		this.props.viewletService.openViewlet(VIEWLET_ID, true)
 			.then(viewlet => viewlet as IExtensionsViewlet)
-			.done(viewlet => viewlet.search(`publisher:"${ this.extension.publisherDisplayName }"`, true));
+			.done(viewlet => viewlet.search(`publisher:"${ this.props.extension.publisherDisplayName }"`, true));
 	}
 
+	@autobind
 	private onRatingClick(): void {
-		if (!this.extension || !product.extensionsGallery) {
+		if (!this.props.extension || !product.extensionsGallery) {
 			return null;
 		}
 
-		shell.openExternal(`${ this.extensionUrl }#review-details`);
+		shell.openExternal(`${ getExtensionUrl(this.props.extension) }#review-details`);
 	}
 
+	@autobind
 	private onLicenseClick(): void {
-		if (!this.extension || !product.extensionsGallery) {
+		if (!this.props.extension || !product.extensionsGallery) {
 			return null;
 		}
 
-		shell.openExternal(this.extensionLicenseUrl);
+		shell.openExternal(getExtensionLicenseUrl(this.props.extension));
 	}
 }
 
@@ -152,19 +147,119 @@ function renderBody(body: string): string {
 		</html>`;
 }
 
+export interface BodyServices {
+	requestService: IRequestService;
+	themeService: IThemeService;
+}
+
+export interface BodyProps extends BodyServices {
+	extension: IExtension;
+}
+
+export class Body extends Component<BodyProps, void> {
+
+	private disposables: IDisposable[] = [];
+
+	shouldComponentUpdate() {
+		return false;
+	}
+
+	componentWillReceiveProps(props: BodyProps) {
+		this.load(props.extension);
+	}
+
+	componentDidMount() {
+		this.load(this.props.extension);
+	}
+
+	componentWillUnmount() {
+		this.disposables = dispose(this.disposables);
+		this.base.innerHTML = '';
+	}
+
+	private load(extension: IExtension) {
+		this.disposables = dispose(this.disposables);
+
+		this.base.innerHTML = '';
+		let promise = TPromise.as(null);
+
+		if (extension.readmeUrl) {
+			promise = promise
+				.then(() => addClass(this.base, 'loading'))
+				.then(() => this.props.requestService.makeRequest({ url: extension.readmeUrl }))
+				.then(response => response.responseText)
+				.then(marked.parse)
+				.then<void>(body => {
+					const webview = new WebView(
+						this.base,
+						document.querySelector('.monaco-editor-background'),
+						link => shell.openExternal(link.toString())
+					);
+
+					webview.style(this.props.themeService.getTheme());
+					webview.contents = [renderBody(body)];
+
+					const listener = this.props.themeService.onDidThemeChange(themeId => webview.style(themeId));
+					this.disposables.push(webview, listener);
+				})
+				.then(null, () => null)
+				.then(() => removeClass(this.base, 'loading'));
+		} else {
+			promise = promise
+				.then(() => append(this.base, $('p')))
+				.then(p => p.textContent = localize('noReadme', "No README available."));
+		}
+	}
+
+	render() {
+		return <div class='body' />;
+	}
+}
+
+interface ExtensionEditorServices extends HeaderServices, BodyServices {
+	extensionsWorkbenchService: IExtensionsWorkbenchService;
+}
+
+interface ExtensionEditorProps extends ExtensionEditorServices {
+	onExtensionChange: Event<IExtension>;
+}
+
+interface ExtensionEditorState {
+	extension: IExtension;
+}
+
+class ExtensionEditorX extends Component<ExtensionEditorProps, ExtensionEditorState> {
+
+	private disposables: IDisposable[] = [];
+
+	componentDidMount() {
+		this.props.onExtensionChange(extension => this.setState({ extension }), null, this.disposables);
+		this.props.extensionsWorkbenchService.onChange(() => this.setState({ extension: this.state.extension }), null, this.disposables);
+	}
+
+	componentWillUnmount() {
+		this.disposables = dispose(this.disposables);
+	}
+
+	render(): JSX.Element {
+		if (!this.state.extension) {
+			return;
+		}
+
+		return <div class='extension-editor'>
+			<Header {...this.state} { ...this.props } />
+			<Body {...this.state} { ...this.props } />
+		</div>;
+	}
+}
+
 export class ExtensionEditor extends BaseEditor {
 
 	static ID: string = 'workbench.editor.extension';
 
-	private onExtensionChange = new Emitter<IExtension>();
-
-	private body: HTMLElement;
-
-	private _highlight: ITemplateData;
-	private highlightDisposable: IDisposable;
-
-	private transientDisposables: IDisposable[];
+	private onExtension: Emitter<IExtension>;
 	private disposables: IDisposable[];
+	private services: ExtensionEditorServices;
 
 	constructor(
 		@ITelemetryService telemetryService: ITelemetryService,
@@ -178,62 +273,21 @@ export class ExtensionEditor extends BaseEditor {
 		@IWorkbenchEditorService private editorService: IWorkbenchEditorService
 	) {
 		super(ExtensionEditor.ID, telemetryService);
-		this._highlight = null;
-		this.highlightDisposable = empty;
-		this.disposables = [];
 
+		this.onExtension = new Emitter<IExtension>();
+		this.disposables = [];
 		viewletService.onDidActiveViewletChange(this.onActiveViewletChange, this, this.disposables);
+
+		this.services = { instantiationService, viewletService, extensionsWorkbenchService, requestService, themeService };
 	}
 
 	createEditor(parent: Builder): void {
 		const container = parent.getHTMLElement();
-
-		const root = append(container, $('.extension-editor'));
-		const header = <Header onExtensionChange={ this.onExtensionChange.event } />;
-		render(header, root, this.instantiationService);
-
-		this.body = append(root, $('.body'));
+		render(<ExtensionEditorX { ...this.services } onExtensionChange={ this.onExtension.event } />, container);
 	}
 
 	setInput(input: ExtensionsInput, options: EditorOptions): TPromise<void> {
-		this.transientDisposables = dispose(this.transientDisposables);
-
-		const extension = input.extension;
-
-		this.body.innerHTML = '';
-		let promise: TPromise<any> = super.setInput(input, options);
-
-		if (extension.readmeUrl) {
-			promise = promise
-				.then(() => addClass(this.body, 'loading'))
-				.then(() => this.requestService.makeRequest({ url: extension.readmeUrl }))
-				.then(response => response.responseText)
-				.then(marked.parse)
-				.then<void>(body => {
-					const webview = new WebView(
-						this.body,
-						document.querySelector('.monaco-editor-background'),
-						link => shell.openExternal(link.toString())
-					);
-
-					webview.style(this.themeService.getTheme());
-					webview.contents = [renderBody(body)];
-
-					const listener = this.themeService.onDidThemeChange(themeId => webview.style(themeId));
-					this.transientDisposables.push(webview, listener);
-				})
-				.then(null, () => null)
-				.then(() => removeClass(this.body, 'loading'));
-		} else {
-			promise = promise
-				.then(() => append(this.body, $('p')))
-				.then(p => p.textContent = localize('noReadme', "No README available."));
-		}
-
-		this.transientDisposables.push(toDisposable(() => promise.cancel()));
-
-		this.onExtensionChange.fire(extension);
-
+		this.onExtension.fire(input.extension);
 		return TPromise.as(null);
 	}
 
@@ -250,8 +304,6 @@ export class ExtensionEditor extends BaseEditor {
 	}
 
 	dispose(): void {
-		this._highlight = null;
-		this.transientDisposables = dispose(this.transientDisposables);
 		this.disposables = dispose(this.disposables);
 		super.dispose();
 	}

@@ -3,4 +3,5 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { Component, Element, render } from 'preact';
+interface Symbol {}
+declare function Symbol(name?: string): Symbol;

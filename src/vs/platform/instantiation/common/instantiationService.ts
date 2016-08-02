@@ -7,7 +7,6 @@
 import {TPromise} from 'vs/base/common/winjs.base';
 import {illegalArgument, illegalState, canceled} from 'vs/base/common/errors';
 import {create} from 'vs/base/common/types';
-import {assign} from 'vs/base/common/objects';
 import * as assert from 'vs/base/common/assert';
 import {Graph} from 'vs/base/common/graph';
 import {SyncDescriptor, AsyncDescriptor} from 'vs/platform/instantiation/common/descriptors';
@@ -80,10 +79,8 @@ export class InstantiationService implements IInstantiationService {
 		}
 	}
 
-	// TODO@joao: :lipstick:, add checks
-	inject(target: any): void {
-		const dependencies = _util.getFieldServiceDependencies(target.__proto__);
-		dependencies.forEach(d => assign(target, { [d.key]: this._getOrCreateServiceInstance(d.id) }));
+	render(param: any): void {
+
 	}
 
 	private _createInstanceAsync<T>(descriptor: AsyncDescriptor<T>, args: any[]): TPromise<T> {
@@ -129,7 +126,7 @@ export class InstantiationService implements IInstantiationService {
 		let staticArgs = desc.staticArguments().concat(args);
 
 		// arguments defined by service decorators
-		let serviceDependencies = _util.getParameterServiceDependencies(desc.ctor).sort((a, b) => a.index - b.index);
+		let serviceDependencies = _util.getServiceDependencies(desc.ctor).sort((a, b) => a.index - b.index);
 		let serviceArgs = serviceDependencies.map(dependency => {
 			let service = this._getOrCreateServiceInstance(dependency.id);
 			if (!service && this._strict && !dependency.optional) {
@@ -202,7 +199,7 @@ export class InstantiationService implements IInstantiationService {
 			}
 
 			// check all dependencies for existence and if the need to be created first
-			let dependencies = _util.getParameterServiceDependencies(item.desc.ctor);
+			let dependencies = _util.getServiceDependencies(item.desc.ctor);
 			for (let dependency of dependencies) {
 
 				let instanceOrDesc = this._services.get(dependency.id);
