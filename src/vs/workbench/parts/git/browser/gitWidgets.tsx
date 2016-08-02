@@ -103,8 +103,6 @@ class GitStatusbarItemX extends Component<void,State> {
 			classes.set(this.state.isSyncing, 'syncing');
 			classes.set(!isOutOfSync, 'empty');
 
-			console.log(!isOutOfSync, classes.toString());
-
 			action = <a class={ classes.toString() } title={  localize('syncBranch', "Synchronize Changes") } onclick={ () => this.onSyncClick() }>
 				<span class='octicon octicon-sync' />
 				<span class=' ahead-behind'>{ aheadBehind }</span>
