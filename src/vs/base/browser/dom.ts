@@ -1012,3 +1012,34 @@ export function finalHandler<T extends Event>(fn: (event: T)=>any): (event: T)=>
 		fn(e);
 	};
 }
+
+export class Classes {
+
+	private classes: string[];
+
+	constructor(...classes: string[]) {
+		this.classes = classes;
+	}
+
+	add(...classes: string[]): void {
+		this.set(true, ...classes);
+	}
+
+	remove(...classes: string[]): void {
+		this.set(false, ...classes);
+	}
+
+	set(condition: boolean, ...classes: string[]): void {
+		this.classes = this.classes.filter(c => classes.every(i => i !== c));
+
+		if (!condition) {
+			return;
+		}
+
+		this.classes = this.classes.concat(classes);
+	}
+
+	toString(): string {
+		return this.classes.join(' ');
+	}
+}
