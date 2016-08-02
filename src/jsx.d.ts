@@ -10,4 +10,4 @@ export { Component, Element } from 'preact';
 /**
  * Custom render function which allows for field service injection.
  */
-export function render(element: PreactElement<any>, container: HTMLElement, instantiationService: IInstantiationService);
+export function render(element: PreactElement<any>, container: HTMLElement, instantiationService?: IInstantiationService): void;

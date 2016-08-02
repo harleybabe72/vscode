@@ -12,6 +12,7 @@ declare namespace Preact {
 		shouldComponentUpdate?(nextProps: P, nextState: S, nextContext: any): boolean;
 		componentWillUpdate?(nextProps: P, nextState: S, nextContext: any): void;
 		componentDidUpdate?(prevProps: P, prevState: S, prevContext: any): void;
+		getInitialState?(): S;
 	}
 
 	export class Component<P,S> implements ComponentLifecycle<P,S> {
@@ -24,7 +25,7 @@ declare namespace Preact {
 	}
 
 	export function h(tagName: string, props: any, ...children: Element<any>[]): Element<any>;
-	export function render(element: Element<any>, container: HTMLElement);
+	export function render(element: Element<any>, container: HTMLElement): void;
 }
 
 declare namespace JSX {

@@ -17,7 +17,7 @@ define(['preact'], preact => {
 	const _render = preact.render;
 
 	function render(vnode, container, instantiationService) {
-		if (vnode && !isFunctionalComponent(vnode) && typeof vnode !== 'string' && typeof vnode.nodeName === 'function') {
+		if (instantiationService && vnode && !isFunctionalComponent(vnode) && typeof vnode !== 'string' && typeof vnode.nodeName === 'function') {
 			const ctor = vnode.nodeName;
 			const instantiate = (...args) => {
 				const inst = new ctor(...args);
