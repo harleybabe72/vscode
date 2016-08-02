@@ -100,7 +100,7 @@ export class Header extends Component<HeaderProps, HeaderState> {
 				</div>
 				<div class='description'>{ this.extension.description }</div>
 				<div class='actions'>
-					<ActionBarX actions={ this.actions } actionOptions={{ icon: true, label: true }} />
+					<ActionBarX actions={ this.actions } options={{ animated: false }} actionOptions={{ icon: true, label: true }} />
 				</div>
 			</div>
 		</div>;
@@ -199,12 +199,6 @@ export class ExtensionEditor extends BaseEditor {
 		this.transientDisposables = dispose(this.transientDisposables);
 
 		const extension = input.extension;
-
-		// const install = this.instantiationService.createInstance(InstallWidget, this.installCount, { extension });
-		// this.transientDisposables.push(install);
-
-		// const ratings = this.instantiationService.createInstance(RatingsWidget, this.rating, { extension });
-		// this.transientDisposables.push(ratings);
 
 		this.body.innerHTML = '';
 		let promise: TPromise<any> = super.setInput(input, options);
