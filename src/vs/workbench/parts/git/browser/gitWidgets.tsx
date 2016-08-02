@@ -90,13 +90,9 @@ class GitStatusbarItemX extends Component<void,State> {
 		branchClasses.set(state.HEAD && !state.HEAD.name, 'headless');
 
 		const isOutOfSync = state.HEAD && state.HEAD.name && state.HEAD.commit && state.HEAD.upstream && (state.HEAD.ahead || state.HEAD.behind);
-		let aheadBehind = '';
+		const aheadBehind = isOutOfSync ? strings.format('{0}↓ {1}↑', state.HEAD.behind, state.HEAD.ahead) : '';
 
-		if (isOutOfSync) {
-			aheadBehind = strings.format('{0}↓ {1}↑', state.HEAD.behind, state.HEAD.ahead);
-		}
-
-		let action = null;
+		let action: Element<any> = null;
 
 		if (state.HEAD && !!state.HEAD.upstream) {
 			const classes = new Classes('git-statusbar-sync-item');
