@@ -73,7 +73,7 @@ const copyrightFilter = [
 	'!**/*.md',
 	'!**/*.bat',
 	'!**/*.cmd',
-	'!resources/win32/bin/code.js',
+	'!resources/**',
 	'!**/*.xml',
 	'!**/*.sh',
 	'!**/*.txt',

@@ -142,12 +142,18 @@ function buildRpmPackage(arch) {
 	]);
 }
 
+function buildAppImage(arch) {
+	return shell.task(`/home/joao/Work/AppImageKit/AppImageAssistant .build/linux/AppImage/${ arch }/Code.AppDir .build/linux/AppImage/${ arch }/Code.AppImage`);
+}
+
 gulp.task('clean-vscode-linux-ia32-deb', util.rimraf('.build/linux/deb/i386'));
 gulp.task('clean-vscode-linux-x64-deb', util.rimraf('.build/linux/deb/amd64'));
 gulp.task('clean-vscode-linux-arm-deb', util.rimraf('.build/linux/deb/armhf'));
 gulp.task('clean-vscode-linux-ia32-rpm', util.rimraf('.build/linux/rpm/i386'));
 gulp.task('clean-vscode-linux-x64-rpm', util.rimraf('.build/linux/rpm/x86_64'));
 gulp.task('clean-vscode-linux-arm-rpm', util.rimraf('.build/linux/rpm/armhf'));
+gulp.task('clean-vscode-linux-ia32-AppImage', util.rimraf('.build/linux/AppImage/i386'));
+gulp.task('clean-vscode-linux-x64-AppImage', util.rimraf('.build/linux/AppImage/x64'));
 
 gulp.task('vscode-linux-ia32-prepare-deb', ['clean-vscode-linux-ia32-deb', 'vscode-linux-ia32-min'], prepareDebPackage('ia32'));
 gulp.task('vscode-linux-x64-prepare-deb', ['clean-vscode-linux-x64-deb', 'vscode-linux-x64-min'], prepareDebPackage('x64'));
@@ -162,3 +168,6 @@ gulp.task('vscode-linux-arm-prepare-rpm', ['clean-vscode-linux-arm-rpm', 'vscode
 gulp.task('vscode-linux-ia32-build-rpm', ['vscode-linux-ia32-prepare-rpm'], buildRpmPackage('ia32'));
 gulp.task('vscode-linux-x64-build-rpm', ['vscode-linux-x64-prepare-rpm'], buildRpmPackage('x64'));
 gulp.task('vscode-linux-arm-build-rpm', ['vscode-linux-arm-prepare-rpm'], buildRpmPackage('arm'));
+
+gulp.task('vscode-linux-ia32-AppImage', ['vscode-linux-ia32-min'], buildAppImage('ia32'));
+gulp.task('vscode-linux-x64-AppImage',[/*'vscode-linux-x64-min'*/], buildAppImage('x64'));
