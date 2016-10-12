@@ -5,8 +5,9 @@
 
 'use strict';
 
+import * as path from 'path';
 import { Event, TextEditor, window, workspace } from 'vscode';
-import { IDisposable, dispose, mapEvent } from './util';
+import { IDisposable, dispose, anyEvent } from './util';
 
 type TextEditorsEvent = Event<TextEditor[]>;
 
@@ -17,7 +18,6 @@ class ResourceDecorator implements IDisposable {
 	private textEditors: TextEditor[] = [];
 
 	constructor(private path: string) {
-		// console.log(`creating: ${this.path}`);
 	}
 
 	add(textEditor: TextEditor): void {
@@ -34,30 +34,61 @@ class ResourceDecorator implements IDisposable {
 	}
 
 	dispose(): void {
-		// console.log(`disposing: ${this.path}`);
 	}
 }
 
 export class DirtyDiff implements IDisposable {
 
+	private rootPath: string;
 	private textEditors: { editor: TextEditor; path: string; }[] = [];
 	private decorators: { [uri: string]: ResourceDecorator } = Object.create(null);
 	private disposables: IDisposable[] = [];
 
 	constructor() {
-		const onVisibleTextEditorsChange = mapEvent(window.onDidChangeActiveTextEditor, () => window.visibleTextEditors);
+		this.rootPath = path.normalize(workspace.rootPath);
+
+		if (!this.rootPath) {
+			return;
+		}
+
+		// Unfortunately we must listen on all these events, since
+		// there isn't a onDidChangeVisibleTextEditors
+		const onVisibleTextEditorsChange = anyEvent<any>(
+			window.onDidChangeActiveTextEditor,
+			workspace.onDidOpenTextDocument,
+			workspace.onDidCloseTextDocument
+		);
+
 		onVisibleTextEditorsChange(this.onDidVisibleEditorsChange, this, this.disposables);
-		this.onDidVisibleEditorsChange(window.visibleTextEditors);
+		this.onDidVisibleEditorsChange();
 
 		const watcher = workspace.createFileSystemWatcher('**');
 
 		this.disposables.push(watcher);
 	}
 
-	private onDidVisibleEditorsChange(textEditors: TextEditor[]) {
-		const added = textEditors.filter(a => this.textEditors.every(({ editor }) => a !== editor)).map(editor => ({ editor, path: workspace.asRelativePath(editor.document.uri) }));
-		const removed = this.textEditors.filter(({ editor }) => textEditors.every(b => editor !== b));
-		this.textEditors = textEditors.map(editor => ({ editor, path: workspace.asRelativePath(editor.document.uri) }));
+	private onDidVisibleEditorsChange(): void {
+		const textEditors = window.visibleTextEditors.filter(editor => {
+			const uri = editor.document && editor.document.uri;
+			const fsPath = uri && path.normalize(uri.fsPath);
+			const relativePath = fsPath && path.relative(this.rootPath, fsPath);
+			return relativePath && !/^\.\./.test(relativePath);
+		});
+
+		const added = textEditors
+			.filter(a => this.textEditors.every(({ editor }) => a !== editor))
+			.map(editor => ({ editor, path: workspace.asRelativePath(editor.document.uri) }));
+
+		const removed = this.textEditors
+			.filter(({ editor }) => textEditors.every(b => editor !== b));
+
+		this.textEditors = textEditors
+			.map(editor => ({ editor, path: workspace.asRelativePath(editor.document.uri) }));
+
+		added.forEach(({ editor, path }) => {
+			const decorator = this.decorators[path] || (this.decorators[path] = new ResourceDecorator(path));
+			decorator.add(editor);
+		});
 
 		removed.forEach(({ editor, path }) => {
 			const decorator = this.decorators[path];
@@ -67,11 +98,6 @@ export class DirtyDiff implements IDisposable {
 				decorator.dispose();
 				delete this.decorators[path];
 			}
-		});
-
-		added.forEach(({ editor, path }) => {
-			const decorator = this.decorators[path] || (this.decorators[path] = new ResourceDecorator(path));
-			decorator.add(editor);
 		});
 	}
 

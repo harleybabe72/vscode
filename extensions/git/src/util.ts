@@ -28,7 +28,7 @@ export function filterEvent<T>(event: Event<T>, filter: (e: T) => boolean): Even
 	return (listener, thisArgs = null, disposables?) => event(e => filter(e) && listener.call(thisArgs, e), null, disposables);
 }
 
-export function any<T>(...events: Event<T>[]): Event<T> {
+export function anyEvent<T>(...events: Event<T>[]): Event<T> {
 	return (listener, thisArgs = null, disposables?) => combinedDisposable(events.map(event => event(i => listener.call(thisArgs, i), disposables)));
 }
 
