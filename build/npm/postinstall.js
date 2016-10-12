@@ -17,12 +17,13 @@ const extensions = [
 	'php',
 	'javascript',
 	'css',
-	'html'
+	'html',
+	'git'
 ];
 
 extensions.forEach(extension => {
 	cp.spawnSync(npm, ['install'], {
-		cwd: `extensions/${ extension }`,
+		cwd: `extensions/${extension}`,
 		stdio: 'inherit'
 	});
 });
