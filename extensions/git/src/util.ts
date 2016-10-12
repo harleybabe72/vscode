@@ -16,8 +16,12 @@ export function dispose<T extends IDisposable>(disposables: T[]): T[] {
 	return [];
 }
 
+export function toDisposable(dispose: () => void): IDisposable {
+	return { dispose };
+}
+
 export function combinedDisposable(disposables: IDisposable[]): IDisposable {
-	return { dispose: () => dispose(disposables) };
+	return toDisposable(() => dispose(disposables));
 }
 
 export function mapEvent<I, O>(event: Event<I>, map: (i: I) => O): Event<O> {

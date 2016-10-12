@@ -6,10 +6,10 @@
 'use strict';
 
 import * as path from 'path';
-import * as cp from 'child_process';
 import { Event, TextEditor, window, workspace, Range, TextEditorDecorationType } from 'vscode';
 import { IDisposable, dispose, anyEvent } from './util';
 import * as parseDiff from 'parse-diff';
+import { Git } from './git';
 
 type TextEditorsEvent = Event<TextEditor[]>;
 
@@ -26,13 +26,9 @@ class ResourceDecorator implements IDisposable {
 	private modifys: Range[] = [];
 	private textEditors: TextEditor[] = [];
 
-	constructor(private decorationTypes: IDecorationTypes, private workspacePath: string, private path: string) {
-		cp.exec(`git diff-files -U0 -q -- ${path}`, { cwd: workspacePath }, (err, out) => {
-			if (err) {
-				console.error(err);
-			}
-
-			const patch = parseDiff(out.toString())[0];
+	constructor(private git: Git, private decorationTypes: IDecorationTypes, private workspacePath: string, private path: string) {
+		git.exec(workspacePath, ['diff-files', '-U0', '-q', '--', path]).then(result => {
+			const patch = parseDiff(result.stdout)[0];
 
 			if (!patch) {
 				return;
@@ -57,7 +53,8 @@ class ResourceDecorator implements IDisposable {
 			});
 
 			this.textEditors.forEach(e => this.decorate(e));
-		});
+		})
+			.catch(err => console.error(err));
 	}
 
 	add(textEditor: TextEditor): void {
@@ -97,7 +94,7 @@ export class DirtyDiff implements IDisposable {
 	private decorators: { [uri: string]: ResourceDecorator } = Object.create(null);
 	private disposables: IDisposable[] = [];
 
-	constructor() {
+	constructor(private git: Git) {
 		this.rootPath = path.normalize(workspace.rootPath);
 
 		if (!this.rootPath) {
@@ -145,7 +142,7 @@ export class DirtyDiff implements IDisposable {
 			.map(editor => ({ editor, path: workspace.asRelativePath(editor.document.uri) }));
 
 		added.forEach(({ editor, path }) => {
-			const decorator = this.decorators[path] || (this.decorators[path] = new ResourceDecorator(this.decorationTypes, this.rootPath, path));
+			const decorator = this.decorators[path] || (this.decorators[path] = new ResourceDecorator(this.git, this.decorationTypes, this.rootPath, path));
 			decorator.add(editor);
 		});
 
