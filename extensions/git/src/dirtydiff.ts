@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 import { Event, TextEditor, window, workspace, Range, TextEditorDecorationType } from 'vscode';
-import { IDisposable, dispose, anyEvent } from './util';
+import { IDisposable, dispose } from './util';
 import * as parseDiff from 'parse-diff';
 import { Git } from './git';
 
@@ -107,38 +107,30 @@ export class DirtyDiff implements IDisposable {
 			modify: window.createTextEditorDecorationType({ color: 'blue' })
 		};
 
-		// Unfortunately we must listen on all these events, since
-		// there isn't a onDidChangeVisibleTextEditors
-		const onVisibleTextEditorsChange = anyEvent<any>(
-			window.onDidChangeActiveTextEditor,
-			workspace.onDidOpenTextDocument,
-			workspace.onDidCloseTextDocument
-		);
-
-		onVisibleTextEditorsChange(this.onDidVisibleEditorsChange, this, this.disposables);
-		this.onDidVisibleEditorsChange();
+		window.onDidChangeVisibleTextEditors(this.onDidVisibleEditorsChange, this, this.disposables);
+		this.onDidVisibleEditorsChange(window.visibleTextEditors);
 
 		const watcher = workspace.createFileSystemWatcher('**');
 
 		this.disposables.push(watcher);
 	}
 
-	private onDidVisibleEditorsChange(): void {
-		const textEditors = window.visibleTextEditors.filter(editor => {
+	private onDidVisibleEditorsChange(textEditors: TextEditor[]): void {
+		const relevantTextEditors = textEditors.filter(editor => {
 			const uri = editor.document && editor.document.uri;
 			const fsPath = uri && path.normalize(uri.fsPath);
 			const relativePath = fsPath && path.relative(this.rootPath, fsPath);
 			return relativePath && !/^\.\./.test(relativePath);
 		});
 
-		const added = textEditors
+		const added = relevantTextEditors
 			.filter(a => this.textEditors.every(({ editor }) => a !== editor))
 			.map(editor => ({ editor, path: workspace.asRelativePath(editor.document.uri) }));
 
 		const removed = this.textEditors
-			.filter(({ editor }) => textEditors.every(b => editor !== b));
+			.filter(({ editor }) => relevantTextEditors.every(b => editor !== b));
 
-		this.textEditors = textEditors
+		this.textEditors = relevantTextEditors
 			.map(editor => ({ editor, path: workspace.asRelativePath(editor.document.uri) }));
 
 		added.forEach(({ editor, path }) => {
