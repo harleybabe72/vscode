@@ -7,7 +7,7 @@
 
 import * as path from 'path';
 import { Event, TextEditor, window, workspace, Range, TextEditorDecorationType } from 'vscode';
-import { IDisposable, dispose } from './util';
+import { IDisposable, dispose, debounce } from './util';
 import * as parseDiff from 'parse-diff';
 import { Git } from './git';
 
@@ -26,35 +26,48 @@ class ResourceDecorator implements IDisposable {
 	private modifys: Range[] = [];
 	private textEditors: TextEditor[] = [];
 
-	constructor(private git: Git, private decorationTypes: IDecorationTypes, private workspacePath: string, private path: string) {
-		git.exec(workspacePath, ['diff-files', '-U0', '-q', '--', path]).then(result => {
-			const patch = parseDiff(result.stdout)[0];
+	constructor(
+		private git: Git,
+		private decorationTypes: IDecorationTypes,
+		private workspacePath: string,
+		private path: string
+	) {
+		this.diff();
+	}
 
-			if (!patch) {
-				return;
-			}
-
-			patch.chunks.forEach(chunk => {
-				const changes = chunk.changes.filter(c => c.del || c.add);
-				const deletions = changes.filter(c => c.del).length;
-				const additions = changes.filter(c => c.add).length;
-
-				if (additions === 0) {
-					this.deletes.push(new Range(chunk.newStart - 1, 0, chunk.newStart, 0));
-				} else if (deletions === 0) {
-					for (let i = 0; i < additions; i++) {
-						this.adds.push(new Range(chunk.newStart - 1 + i, 0, chunk.newStart + i, 0));
-					}
-				} else {
-					for (let i = 0; i < additions; i++) {
-						this.modifys.push(new Range(chunk.newStart - 1 + i, 0, chunk.newStart + i, 0));
-					}
-				}
-			});
-
-			this.textEditors.forEach(e => this.decorate(e));
-		})
+	@debounce(100)
+	private diff(): Promise<void> {
+		return this.git.exec(this.workspacePath, ['diff-files', '-U0', '-q', '--', this.path])
+			.then(result => this.onDiff(result.stdout))
 			.catch(err => console.error(err));
+	}
+
+	private onDiff(diff: string): void {
+		const patch = parseDiff(diff)[0];
+
+		if (!patch) {
+			return;
+		}
+
+		patch.chunks.forEach(chunk => {
+			const changes = chunk.changes.filter(c => c.del || c.add);
+			const deletions = changes.filter(c => c.del).length;
+			const additions = changes.filter(c => c.add).length;
+
+			if (additions === 0) {
+				this.deletes.push(new Range(chunk.newStart - 1, 0, chunk.newStart, 0));
+			} else if (deletions === 0) {
+				for (let i = 0; i < additions; i++) {
+					this.adds.push(new Range(chunk.newStart - 1 + i, 0, chunk.newStart + i, 0));
+				}
+			} else {
+				for (let i = 0; i < additions; i++) {
+					this.modifys.push(new Range(chunk.newStart - 1 + i, 0, chunk.newStart + i, 0));
+				}
+			}
+		});
+
+		this.textEditors.forEach(e => this.decorate(e));
 	}
 
 	add(textEditor: TextEditor): void {

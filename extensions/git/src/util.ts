@@ -6,6 +6,7 @@
 'use strict';
 
 import { Event } from 'vscode';
+import * as debouncePromise from 'debounce-promise';
 
 export interface IDisposable {
 	dispose(): void;
@@ -63,4 +64,30 @@ export class Emitter<T> {
 	fire(e: T = null): void {
 
 	}
+}
+
+export function debounce(wait: number) {
+	return (target: any, key: string, descriptor: any) => {
+		if (!(typeof descriptor.value === 'function')) {
+			throw new Error('not supported');
+		}
+
+		const fn = descriptor.value;
+		const memoizeKey = `$memoize$${key}`;
+
+		descriptor['value'] = function (...args) {
+			if (!this.hasOwnProperty(memoizeKey)) {
+				const debouncedFn = debouncePromise(fn.bind(this), wait);
+
+				Object.defineProperty(this, memoizeKey, {
+					configurable: false,
+					enumerable: false,
+					writable: false,
+					value: debouncedFn
+				});
+			}
+
+			return this[memoizeKey].apply(this, args);
+		};
+	};
 }

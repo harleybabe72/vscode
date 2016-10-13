@@ -60,6 +60,7 @@
     "postinstall": "node ./node_modules/vscode/bin/install"
   },
   "dependencies": {
+    "debounce-promise": "^2.0.1",
     "denodeify": "^1.2.1",
     "lodash": "^4.16.4",
     "parse-diff": "^0.4.0"
