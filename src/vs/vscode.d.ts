@@ -684,6 +684,22 @@ declare namespace vscode {
 	}
 
 	/**
+	 * Represents different styles of decorations for a line.
+	 * A line decoration appears between the line numbers and the line contents.
+	 */
+	export enum LineDecorationStyle {
+		/**
+		 * A vertical color bar.
+		 */
+		Default = 1,
+
+		/**
+		 * A color triangle in between two consecutive lines.
+		 */
+		InBetween = 2
+	}
+
+	/**
 	 * Represents different positions for rendering a decoration in an [overview ruler](#DecorationRenderOptions.overviewRulerLane).
 	 * The overview ruler supports three lanes.
 	 */
@@ -792,6 +808,9 @@ declare namespace vscode {
 		 * For further information: https://msdn.microsoft.com/en-us/library/jj127316(v=vs.85).aspx
 		 */
 		gutterIconSize?: string;
+
+		lineDecorationColor?: string;
+		lineDecorationStyle?: LineDecorationStyle;
 
 		/**
 		 * The color of the decoration in the overview ruler. Use rgba() and define transparent colors to play well with other decorations.

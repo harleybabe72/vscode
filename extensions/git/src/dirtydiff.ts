@@ -6,7 +6,7 @@
 'use strict';
 
 import * as path from 'path';
-import { Event, TextEditor, window, workspace, Range, TextEditorDecorationType, Uri, FileSystemWatcher, DecorationRenderOptions, OverviewRulerLane } from 'vscode';
+import { Event, TextEditor, window, workspace, Range, TextEditorDecorationType, Uri, FileSystemWatcher, DecorationRenderOptions, OverviewRulerLane, LineDecorationStyle } from 'vscode';
 import { IDisposable, dispose, debounce, anyEvent, filterEvent, mapEvent, memoize } from './util';
 import * as _ from 'lodash';
 import * as parseDiff from 'parse-diff';
@@ -134,9 +134,9 @@ export class DirtyDiff implements IDisposable {
 		const create = opts => window.createTextEditorDecorationType(_.assign({}, base, opts));
 
 		return {
-			add: create({ color: 'green' }),
-			delete: create({ color: 'red' }),
-			modify: create({ color: 'blue' })
+			add: create({ lineDecorationColor: 'rgba(45, 136, 62, 0.6)', dark: { lineDecorationColor: 'rgba(127, 186, 0, 0.6)' } }),
+			delete: create({ lineDecorationColor: 'rgba(185, 19, 26, 0.76)', lineDecorationStyle: LineDecorationStyle.InBetween }),
+			modify: create({ lineDecorationColor: 'rgba(0, 122, 204, 0.6)', dark: { lineDecorationColor: 'rgba(0, 188, 242, 0.6)' } })
 		};
 	}
 

@@ -11,7 +11,7 @@ import URI from 'vs/base/common/uri';
 import * as dom from 'vs/base/browser/dom';
 import {
 	IDecorationRenderOptions, IModelDecorationOptions, IModelDecorationOverviewRulerOptions, IThemeDecorationRenderOptions,
-	IContentDecorationRenderOptions, OverviewRulerLane, TrackedRangeStickiness
+	IContentDecorationRenderOptions, OverviewRulerLane, TrackedRangeStickiness, LineDecorationStyle
 } from 'vs/editor/common/editorCommon';
 import { AbstractCodeEditorService } from 'vs/editor/common/services/abstractCodeEditorService';
 import { IDisposable, toDisposable } from 'vs/base/common/lifecycle';
@@ -139,6 +139,7 @@ class DecorationTypeOptionsProvider implements IModelDecorationOptionsProvider {
 	public beforeContentClassName: string;
 	public afterContentClassName: string;
 	public glyphMarginClassName: string;
+	public linesDecorationsClassName: string;
 	public isWholeLine: boolean;
 	public overviewRuler: IModelDecorationOverviewRulerOptions;
 	public stickiness: TrackedRangeStickiness;
@@ -203,6 +204,17 @@ class DecorationTypeOptionsProvider implements IModelDecorationOptionsProvider {
 			}
 		);
 
+		this.linesDecorationsClassName = DecorationRenderHelper.createCSSRules(
+			styleSheet,
+			key,
+			null,
+			ModelDecorationCSSRuleType.AfterContentClassName,
+			{
+				light: DecorationRenderHelper.getCSSTextForModelDecorationLinesDecorationClassName(themedOpts.light),
+				dark: DecorationRenderHelper.getCSSTextForModelDecorationLinesDecorationClassName(themedOpts.dark)
+			}
+		);
+
 		this.isWholeLine = Boolean(options.isWholeLine);
 
 		if (
@@ -231,6 +243,7 @@ class DecorationTypeOptionsProvider implements IModelDecorationOptionsProvider {
 			afterContentClassName: this.afterContentClassName,
 			className: this.className,
 			glyphMarginClassName: this.glyphMarginClassName,
+			linesDecorationsClassName: this.linesDecorationsClassName,
 			isWholeLine: this.isWholeLine,
 			overviewRuler: this.overviewRuler,
 			stickiness: this.stickiness
@@ -256,6 +269,10 @@ class DecorationRenderHelper {
 		outlineWidth: 'outline-width:{0};',
 
 		border: 'border:{0};',
+		borderLeft: 'border-left:{0};',
+		borderRight: 'border-right:{0};',
+		borderTop: 'border-top:{0};',
+		borderBottom: 'border-bottom:{0};',
 		borderColor: 'border-color:{0};',
 		borderRadius: 'border-radius:{0};',
 		borderSpacing: 'border-spacing:{0};',
@@ -273,7 +290,15 @@ class DecorationRenderHelper {
 		contentIconPath: 'content:url(\'{0}\');',
 		margin: 'margin:{0};',
 		width: 'width:{0};',
-		height: 'height:{0};'
+		height: 'height:{0};',
+
+		position: 'position:{0};',
+		top: 'top:{0};',
+		bottom: 'bottom:{0};',
+		left: 'left:{0};',
+		right: 'right:{0};',
+
+		boxSizing: 'box-sizing:{0};'
 	};
 
 	/**
@@ -342,6 +367,36 @@ class DecorationRenderHelper {
 		return cssTextArr.join('');
 	}
 
+	/**
+	 * Build the CSS for decorations styled via `linesDecorationClassName`.
+	 */
+	public static getCSSTextForModelDecorationLinesDecorationClassName(opts: IThemeDecorationRenderOptions): string {
+		let cssTextArr = [];
+
+		if (typeof opts.lineDecorationColor !== 'undefined') {
+			const style = typeof opts.lineDecorationStyle === 'undefined' ? LineDecorationStyle.Default : opts.lineDecorationStyle;
+
+			cssTextArr.push(strings.format(this._CSS_MAP.margin, '0 0 0 5px'));
+			cssTextArr.push(strings.format(this._CSS_MAP.contentText, ''));
+			cssTextArr.push(strings.format(this._CSS_MAP.position, 'absolute'));
+
+			if (style === LineDecorationStyle.Default) {
+				cssTextArr.push(strings.format(this._CSS_MAP.borderLeft, `3px solid ${opts.lineDecorationColor}`));
+				cssTextArr.push(strings.format(this._CSS_MAP.height, '100%'));
+			} else {
+				cssTextArr.push(strings.format(this._CSS_MAP.bottom, '-4px'));
+				cssTextArr.push(strings.format(this._CSS_MAP.boxSizing, 'border-box'));
+				cssTextArr.push(strings.format(this._CSS_MAP.borderLeft, `4px solid ${opts.lineDecorationColor}`));
+				cssTextArr.push(strings.format(this._CSS_MAP.borderTop, `4px solid transparent`));
+				cssTextArr.push(strings.format(this._CSS_MAP.borderBottom, `4px solid transparent`));
+				cssTextArr.push(strings.format(this._CSS_MAP.width, '4px'));
+				cssTextArr.push(strings.format(this._CSS_MAP.height, '0'));
+			}
+		}
+
+		return cssTextArr.join('');
+	}
+
 	private static border_rules = ['border', 'borderColor', 'borderColor', 'borderSpacing', 'borderStyle', 'borderWidth'];
 
 	public static collectBorderSettingsCSSText(opts: any, cssTextArr: string[]): boolean {
@@ -402,7 +457,8 @@ const enum ModelDecorationCSSRuleType {
 	InlineClassName = 1,
 	GlyphMarginClassName = 2,
 	BeforeContentClassName = 3,
-	AfterContentClassName = 4
+	AfterContentClassName = 4,
+	LinesDecorationClassName = 5
 }
 
 class CSSNameHelper {

@@ -3800,6 +3800,14 @@ export interface IEditorContribution {
 /**
  * @internal
  */
+export enum LineDecorationStyle {
+	Default = 1,
+	InBetween = 2
+}
+
+/**
+ * @internal
+ */
 export interface IThemeDecorationRenderOptions {
 	backgroundColor?: string;
 
@@ -3822,6 +3830,9 @@ export interface IThemeDecorationRenderOptions {
 
 	gutterIconPath?: string | URI;
 	gutterIconSize?: string;
+
+	lineDecorationColor?: string;
+	lineDecorationStyle?: LineDecorationStyle;
 
 	overviewRulerColor?: string;
 

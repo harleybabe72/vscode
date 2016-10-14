@@ -81,6 +81,7 @@ export class ExtHostAPIImplementation {
 	CompletionList: typeof vscode.CompletionList;
 	DocumentLink: typeof vscode.DocumentLink;
 	IndentAction: typeof vscode.IndentAction;
+	LineDecorationStyle: typeof vscode.LineDecorationStyle;
 	OverviewRulerLane: typeof vscode.OverviewRulerLane;
 	TextEditorRevealType: typeof vscode.TextEditorRevealType;
 	EndOfLine: typeof vscode.EndOfLine;
@@ -166,6 +167,7 @@ export class ExtHostAPIImplementation {
 		this.ViewColumn = extHostTypes.ViewColumn;
 		this.StatusBarAlignment = extHostTypes.StatusBarAlignment;
 		this.IndentAction = Modes.IndentAction;
+		this.LineDecorationStyle = EditorCommon.LineDecorationStyle;
 		this.OverviewRulerLane = EditorCommon.OverviewRulerLane;
 		this.TextEditorRevealType = extHostTypes.TextEditorRevealType;
 		this.EndOfLine = extHostTypes.EndOfLine;
