@@ -6,8 +6,9 @@
 'use strict';
 
 import * as path from 'path';
-import { Event, TextEditor, window, workspace, Range, TextEditorDecorationType, Uri, FileSystemWatcher } from 'vscode';
+import { Event, TextEditor, window, workspace, Range, TextEditorDecorationType, Uri, FileSystemWatcher, DecorationRenderOptions, OverviewRulerLane } from 'vscode';
 import { IDisposable, dispose, debounce, anyEvent, filterEvent, mapEvent, memoize } from './util';
+import * as _ from 'lodash';
 import * as parseDiff from 'parse-diff';
 import { Git } from './git';
 
@@ -26,7 +27,7 @@ interface IDecorationTypes {
 	modify: TextEditorDecorationType;
 }
 
-class ResourceDecorator implements IDisposable {
+class DocumentDecorator implements IDisposable {
 
 	private adds: Range[] = [];
 	private deletes: Range[] = [];
@@ -86,14 +87,14 @@ class ResourceDecorator implements IDisposable {
 				const additions = changes.filter(c => c.add).length;
 
 				if (additions === 0) {
-					this.deletes.push(new Range(chunk.newStart - 1, 0, chunk.newStart, 0));
+					this.deletes.push(new Range(chunk.newStart - 1, 0, chunk.newStart - 1, 0));
 				} else if (deletions === 0) {
 					for (let i = 0; i < additions; i++) {
-						this.adds.push(new Range(chunk.newStart - 1 + i, 0, chunk.newStart + i, 0));
+						this.adds.push(new Range(chunk.newStart - 1 + i, 0, chunk.newStart - 1 + i, 0));
 					}
 				} else {
 					for (let i = 0; i < additions; i++) {
-						this.modifys.push(new Range(chunk.newStart - 1 + i, 0, chunk.newStart + i, 0));
+						this.modifys.push(new Range(chunk.newStart - 1 + i, 0, chunk.newStart - 1 + i, 0));
 					}
 				}
 			});
@@ -118,16 +119,24 @@ export class DirtyDiff implements IDisposable {
 
 	private rootPath: string;
 	private textEditors: { editor: TextEditor; path: string; }[] = [];
-	private decorators: { [uri: string]: ResourceDecorator } = Object.create(null);
+	private decorators: { [uri: string]: DocumentDecorator } = Object.create(null);
 	private watcher: FileSystemWatcher;
 	private disposables: IDisposable[] = [];
 
 	@memoize
 	private get decorationTypes(): IDecorationTypes {
+		const base: DecorationRenderOptions = {
+			isWholeLine: true,
+			overviewRulerColor: 'rgba(0, 122, 204, 0.6)',
+			overviewRulerLane: OverviewRulerLane.Left
+		};
+
+		const create = opts => window.createTextEditorDecorationType(_.assign({}, base, opts));
+
 		return {
-			add: window.createTextEditorDecorationType({ color: 'green' }),
-			delete: window.createTextEditorDecorationType({ color: 'red' }),
-			modify: window.createTextEditorDecorationType({ color: 'blue' })
+			add: create({ color: 'green' }),
+			delete: create({ color: 'red' }),
+			modify: create({ color: 'blue' })
 		};
 	}
 
@@ -180,7 +189,7 @@ export class DirtyDiff implements IDisposable {
 
 		added.forEach(({ editor, path }) => {
 			const onFileSystemChange = anyEvent<any>(this.onDotGitChange, this.onSpecificFileChange(path));
-			const decorator = this.decorators[path] || (this.decorators[path] = new ResourceDecorator(this.git, this.decorationTypes, this.rootPath, path, onFileSystemChange));
+			const decorator = this.decorators[path] || (this.decorators[path] = new DocumentDecorator(this.git, this.decorationTypes, this.rootPath, path, onFileSystemChange));
 			decorator.add(editor);
 		});
 
