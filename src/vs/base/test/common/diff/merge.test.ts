@@ -133,5 +133,28 @@ suite('createMerge', () => {
 			merged: { start: 5, length: 0 },
 			theirs: { start: 4, length: 0 }
 		}], 'insertion by us, deletion by them');
+
+		const modification1 = stringDiff('ABCDE', 'AXCDE');
+		const modification2 = stringDiff('ABCDE', 'ABCXE');
+
+		assert.deepEqual(createMerge(modification1, modification2), [{
+			ours: { start: 1, length: 1 },
+			merged: { start: 1, length: 1 },
+			theirs: { start: 1, length: 1 }
+		}, {
+			ours: { start: 3, length: 1 },
+			merged: { start: 3, length: 1 },
+			theirs: { start: 3, length: 1 }
+		}], 'modifications by both');
+
+		assert.deepEqual(createMerge(modification2, modification1), [{
+			ours: { start: 1, length: 1 },
+			merged: { start: 1, length: 1 },
+			theirs: { start: 1, length: 1 }
+		}, {
+			ours: { start: 3, length: 1 },
+			merged: { start: 3, length: 1 },
+			theirs: { start: 3, length: 1 }
+		}], 'modifications by both, reverse');
 	});
 });
