@@ -43,11 +43,16 @@ export function intersect(one: IRange, other: IRange): IRange {
 	return length <= 0 ? null : { start, length };
 }
 
+function shift(range: IRange, amount: number): IRange {
+	return { start: range.start + amount, length: range.length };
+}
+
 export function createMerge(ours: IDiffChange[], theirs: IDiffChange[]): IMergeChange[] {
 	const ours2 = ours.map(fromDiffChange);
 	const theirs2 = theirs.map(fromDiffChange);
 
 	const result: IMergeChange[] = [];
+	let ourDelta = 0, theirDelta = 0;
 	let i = 0, j = 0;
 
 	while (i < ours2.length || j < theirs2.length) {
@@ -63,15 +68,20 @@ export function createMerge(ours: IDiffChange[], theirs: IDiffChange[]): IMergeC
 		if (intersection) {
 			// TODO
 		} else {
-			const ours = useOurs ? ourDiff.modified : theirDiff.original;
-			const theirs = useOurs ? ourDiff.original : theirDiff.modified;
+			const ours = useOurs ? ourDiff.modified : shift(theirDiff.original, ourDelta);
+			const theirs = useOurs ? shift(ourDiff.original, theirDelta) : theirDiff.modified;
 			const merged = useOurs ? ourDiff.original : theirDiff.original;
+
 			result.push({ ours, theirs, merged });
 		}
 
+		const delta = diff.modified.length - diff.original.length;
+
 		if (useOurs) {
+			ourDelta += delta;
 			i++;
 		} else {
+			theirDelta += delta;
 			j++;
 		}
 	}
