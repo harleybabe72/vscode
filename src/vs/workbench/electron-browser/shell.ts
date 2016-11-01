@@ -73,8 +73,7 @@ import { IThemeService } from 'vs/workbench/services/themes/common/themeService'
 import { ThemeService } from 'vs/workbench/services/themes/electron-browser/themeService';
 import { getDelayedChannel } from 'vs/base/parts/ipc/common/ipc';
 import { connect as connectNet } from 'vs/base/parts/ipc/node/ipc.net';
-import { Client as ElectronIPCClient } from 'vs/base/parts/ipc/common/ipc.electron';
-import { ipcRenderer } from 'electron';
+import { Client as ElectronIPCClient } from 'vs/base/parts/ipc/electron-browser/ipc.electron-browser';
 import { IExtensionManagementChannel, ExtensionManagementChannelClient } from 'vs/platform/extensionManagement/common/extensionManagementIpc';
 import { IExtensionManagementService } from 'vs/platform/extensionManagement/common/extensionManagement';
 import { URLChannelClient } from 'vs/platform/url/common/urlIpc';
@@ -212,7 +211,7 @@ export class WorkbenchShell {
 	private initServiceCollection(container: HTMLElement): [InstantiationService, ServiceCollection] {
 		const disposables = new Disposables();
 
-		const mainProcessClient = new ElectronIPCClient(ipcRenderer);
+		const mainProcessClient = new ElectronIPCClient();
 		disposables.add(mainProcessClient);
 
 		const serviceCollection = new ServiceCollection();

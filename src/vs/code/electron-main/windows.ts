@@ -230,6 +230,11 @@ export class WindowsManager implements IWindowsService, IWindowEventService {
 		ipc.on('vscode:workbenchLoaded', (event, windowId: number) => {
 			this.logService.log('IPC#vscode-workbenchLoaded');
 
+			console.log('SENDER ID', event.sender.getId());
+			console.log('SENDER ID', event.sender.getId());
+			console.log('SENDER ID', event.sender.getId());
+			console.log('SENDER ID', event.sender.getId());
+
 			const win = this.getWindowById(windowId);
 			if (win) {
 				win.setReady();
