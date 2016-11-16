@@ -85,4 +85,14 @@ declare module 'vscode' {
 		 */
 		getClickCommand?(node: T): string;
 	}
+
+	// Dirty Diff
+
+	export interface DirtyDiffTextDocumentProvider {
+		getDirtyDiffTextDocument(uri: Uri, token?: CancellationToken): Uri | Thenable<Uri>;
+	}
+
+	export namespace workspace {
+		export function registerDirtyDiffTextDocumentProvider(provider: DirtyDiffTextDocumentProvider): Disposable;
+	}
 }

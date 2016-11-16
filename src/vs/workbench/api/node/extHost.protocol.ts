@@ -220,6 +220,8 @@ export abstract class MainThreadWorkspaceShape {
 	$cancelSearch(requestId: number): Thenable<boolean> { throw ni(); }
 	$saveAll(includeUntitled?: boolean): Thenable<boolean> { throw ni(); }
 	$applyWorkspaceEdit(edits: IResourceEdit[]): TPromise<boolean> { throw ni(); }
+	$registerDirtyDiffTextDocumentProvider(id: number): void { throw ni(); }
+	$unregisterDirtyDiffTextDocumentProvider(id: number): void { throw ni(); }
 }
 
 export abstract class MainProcessExtensionServiceShape {
@@ -323,6 +325,10 @@ export abstract class ExtHostHeapServiceShape {
 	$onGarbageCollection(ids: number[]): void { throw ni(); }
 }
 
+export abstract class ExtHostWorkspaceShape {
+	$getDirtyDiffTextDocument(id: number, uri: URI): TPromise<URI> { throw ni(); }
+}
+
 export abstract class ExtHostLanguageFeaturesShape {
 	$provideDocumentSymbols(handle: number, resource: URI): TPromise<modes.SymbolInformation[]> { throw ni(); }
 	$provideCodeLenses(handle: number, resource: URI): TPromise<modes.ICodeLensSymbol[]> { throw ni(); }
@@ -383,6 +389,7 @@ export const ExtHostContext = {
 	ExtHostConfiguration: createExtId<ExtHostConfigurationShape>('ExtHostConfiguration', ExtHostConfigurationShape),
 	ExtHostDiagnostics: createExtId<ExtHostDiagnosticsShape>('ExtHostDiagnostics', ExtHostDiagnosticsShape),
 	ExtHostDocuments: createExtId<ExtHostDocumentsShape>('ExtHostDocuments', ExtHostDocumentsShape),
+	ExtHostWorkspace: createExtId<ExtHostWorkspaceShape>('ExtHostWorkspace', ExtHostWorkspaceShape),
 	ExtHostDocumentSaveParticipant: createExtId<ExtHostDocumentSaveParticipantShape>('ExtHostDocumentSaveParticipant', ExtHostDocumentSaveParticipantShape),
 	ExtHostEditors: createExtId<ExtHostEditorsShape>('ExtHostEditors', ExtHostEditorsShape),
 	ExtHostExplorers: createExtId<ExtHostTreeExplorersShape>('ExtHostExplorers', ExtHostTreeExplorersShape),

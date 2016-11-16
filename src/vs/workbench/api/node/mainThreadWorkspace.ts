@@ -8,14 +8,18 @@ import { isPromiseCanceledError } from 'vs/base/common/errors';
 import { ISearchService, QueryType } from 'vs/platform/search/common/search';
 import { IWorkspaceContextService, IWorkspace } from 'vs/platform/workspace/common/workspace';
 import { IEventService } from 'vs/platform/event/common/event';
+import { IThreadService } from 'vs/workbench/services/thread/common/threadService';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { ITextFileService } from 'vs/workbench/services/textfile/common/textfiles';
+import { IDirtyDiffService } from 'vs/workbench/services/scm/common/dirtydiff';
 import { ICommonCodeEditor } from 'vs/editor/common/editorCommon';
+import { IDisposable } from 'vs/base/common/lifecycle';
 import { bulkEdit, IResourceEdit } from 'vs/editor/common/services/bulkEdit';
 import { TPromise } from 'vs/base/common/winjs.base';
 import { Uri } from 'vscode';
-import { MainThreadWorkspaceShape } from './extHost.protocol';
+import { ExtHostContext, MainThreadWorkspaceShape, ExtHostWorkspaceShape } from './extHost.protocol';
 import { ITextModelResolverService } from 'vs/platform/textmodelResolver/common/resolver';
+import URI from 'vs/base/common/uri';
 
 export class MainThreadWorkspace extends MainThreadWorkspaceShape {
 
@@ -26,14 +30,18 @@ export class MainThreadWorkspace extends MainThreadWorkspaceShape {
 	private _editorService: IWorkbenchEditorService;
 	private _textModelResolverService: ITextModelResolverService;
 	private _eventService: IEventService;
+	private _proxy: ExtHostWorkspaceShape;
+	private _dirtyDiffTextDocumentProviders: { [id: string]: IDisposable } = Object.create(null);
 
 	constructor(
+		@IThreadService threadService: IThreadService,
 		@ISearchService searchService: ISearchService,
 		@IWorkspaceContextService contextService: IWorkspaceContextService,
 		@ITextFileService textFileService,
 		@IWorkbenchEditorService editorService,
 		@ITextModelResolverService textModelResolverService,
-		@IEventService eventService
+		@IEventService eventService,
+		@IDirtyDiffService private dirtyDiffService: IDirtyDiffService
 	) {
 		super();
 
@@ -43,6 +51,7 @@ export class MainThreadWorkspace extends MainThreadWorkspaceShape {
 		this._editorService = editorService;
 		this._eventService = eventService;
 		this._textModelResolverService = textModelResolverService;
+		this._proxy = threadService.get(ExtHostContext.ExtHostWorkspace);
 	}
 
 	$startSearch(include: string, exclude: string, maxResults: number, requestId: number): Thenable<Uri[]> {
@@ -101,5 +110,22 @@ export class MainThreadWorkspace extends MainThreadWorkspaceShape {
 
 		return bulkEdit(this._eventService, this._textModelResolverService, codeEditor, edits)
 			.then(() => true);
+	}
+
+	$registerDirtyDiffTextDocumentProvider(id: number): void {
+		this.dirtyDiffService.registerDirtyDiffTextDocumentProvider({
+			getDirtyDiffTextDocument: (uri: URI): TPromise<URI> => {
+				return this._proxy.$getDirtyDiffTextDocument(id, uri);
+			}
+		});
+	}
+
+	$unregisterDirtyDiffTextDocumentProvider(id: number): void {
+		const registration = this._dirtyDiffTextDocumentProviders[id];
+
+		if (registration) {
+			registration.dispose();
+			delete this._dirtyDiffTextDocumentProviders[id];
+		}
 	}
 }

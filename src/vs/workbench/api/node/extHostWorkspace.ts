@@ -10,19 +10,26 @@ import { IThreadService } from 'vs/workbench/services/thread/common/threadServic
 import { IResourceEdit } from 'vs/editor/common/services/bulkEdit';
 import { TPromise } from 'vs/base/common/winjs.base';
 import { fromRange } from 'vs/workbench/api/node/extHostTypeConverters';
-import { MainContext, MainThreadWorkspaceShape } from './extHost.protocol';
+import { Disposable } from 'vs/workbench/api/node/extHostTypes';
+import { MainContext, MainThreadWorkspaceShape, ExtHostWorkspaceShape } from './extHost.protocol';
+import { asWinJsPromise } from 'vs/base/common/async';
 import * as vscode from 'vscode';
 
-export class ExtHostWorkspace {
+export class ExtHostWorkspace extends ExtHostWorkspaceShape {
 
 	private static _requestIdPool = 0;
+	private static _handlePool = 0;
+
+	private _dirtyDiffTextDocumentProviders: { [id: number]: vscode.DirtyDiffTextDocumentProvider; };
 
 	private _proxy: MainThreadWorkspaceShape;
 	private _workspacePath: string;
 
 	constructor(threadService: IThreadService, workspacePath: string) {
+		super();
 		this._proxy = threadService.get(MainContext.MainThreadWorkspace);
 		this._workspacePath = workspacePath;
+		this._dirtyDiffTextDocumentProviders = Object.create(null);
 	}
 
 	getPath(): string {
@@ -76,5 +83,28 @@ export class ExtHostWorkspace {
 		}
 
 		return this._proxy.$applyWorkspaceEdit(resourceEdits);
+	}
+
+	registerDirtyDiffTextDocumentProvider(provider: vscode.DirtyDiffTextDocumentProvider): vscode.Disposable {
+		const handle = ExtHostWorkspace._handlePool++;
+
+		this._dirtyDiffTextDocumentProviders[handle] = provider;
+		this._proxy.$registerDirtyDiffTextDocumentProvider(handle);
+
+		return new Disposable(() => {
+			if (delete this._dirtyDiffTextDocumentProviders[handle]) {
+				this._proxy.$unregisterDirtyDiffTextDocumentProvider(handle);
+			}
+		});
+	}
+
+	$getDirtyDiffTextDocument(id: number, uri: URI): TPromise<URI> {
+		const provider = this._dirtyDiffTextDocumentProviders[id];
+
+		if (!provider) {
+			return TPromise.wrapError(`invalid dirty diff text document provider`);
+		}
+
+		return asWinJsPromise(token => provider.getDirtyDiffTextDocument(uri, token));
 	}
 }

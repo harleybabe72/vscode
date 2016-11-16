@@ -355,6 +355,10 @@ export function createApiFactory(initData: IInitData, threadService: IThreadServ
 			},
 			getConfiguration: (section?: string): vscode.WorkspaceConfiguration => {
 				return extHostConfiguration.getConfiguration(section);
+			},
+			// proposed API
+			registerDirtyDiffTextDocumentProvider: (provider: vscode.DirtyDiffTextDocumentProvider): vscode.Disposable => {
+				return extHostWorkspace.registerDirtyDiffTextDocumentProvider(provider);
 			}
 		};
 
