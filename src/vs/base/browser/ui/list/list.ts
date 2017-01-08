@@ -15,12 +15,6 @@ export interface IRenderer<TElement, TTemplateData> {
 	disposeTemplate(templateData: TTemplateData): void;
 }
 
-export interface IListElementEvent<T, E> {
-	element: T;
-	index: number;
-	event: E;
-}
-
 export interface IListMouseEvent<T> extends MouseEvent {
 	element: T;
 	index: number;
