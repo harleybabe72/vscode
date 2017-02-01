@@ -5,22 +5,31 @@
 'use strict';
 
 import nls = require('vs/nls');
-import { IMessageService } from 'vs/platform/message/common/message';
+import { IMessageService, IChoiceService } from 'vs/platform/message/common/message';
 import Severity from 'vs/base/common/severity';
 import { Action } from 'vs/base/common/actions';
 import { TPromise as Promise } from 'vs/base/common/winjs.base';
 import { MainThreadMessageServiceShape } from './extHost.protocol';
+import * as vscode from 'vscode';
 
 export class MainThreadMessageService extends MainThreadMessageServiceShape {
 
-	private _messageService: IMessageService;
-
-	constructor( @IMessageService messageService: IMessageService) {
+	constructor(
+		@IMessageService private _messageService: IMessageService,
+		@IChoiceService private _choiceService: IChoiceService
+	) {
 		super();
-		this._messageService = messageService;
 	}
 
-	$showMessage(severity: Severity, message: string, commands: { title: string; isCloseAffordance: boolean; handle: number; }[]): Thenable<number> {
+	$showMessage(severity: Severity, message: string, options: vscode.MessageOptions, commands: { title: string; isCloseAffordance: boolean; handle: number; }[]): Thenable<number> {
+		if (options.modal) {
+			return this.showModalMessage(severity, message, commands);
+		} else {
+			return this.showMessage(severity, message, commands);
+		}
+	}
+
+	private showMessage(severity: Severity, message: string, commands: { title: string; isCloseAffordance: boolean; handle: number; }[]): Thenable<number> {
 
 		return new Promise<number>(resolve => {
 
@@ -57,5 +66,9 @@ export class MainThreadMessageService extends MainThreadMessageServiceShape {
 				actions
 			});
 		});
+	}
+
+	private showModalMessage(severity: Severity, message: string, commands: { title: string; isCloseAffordance: boolean; handle: number; }[]): Thenable<number> {
+		return this._choiceService.choose(severity, message, ['yes', 'no'], true);
 	}
 }

@@ -8,6 +8,7 @@
 import * as assert from 'assert';
 import { Action } from 'vs/base/common/actions';
 import { MainThreadMessageService } from 'vs/workbench/api/node/mainThreadMessageService';
+import { TPromise as Promise } from 'vs/base/common/winjs.base';
 
 suite('ExtHostMessageService', function () {
 
@@ -19,9 +20,13 @@ suite('ExtHostMessageService', function () {
 				setImmediate(() => m.actions[0].run());
 				return () => { };
 			}
+		}, <any>{
+			choose() {
+				return Promise.as(undefined);
+			}
 		});
 
-		return service.$showMessage(1, 'h', [{ handle: 42, title: 'a thing', isCloseAffordance: true }]).then(handle => {
+		return service.$showMessage(1, 'h', {}, [{ handle: 42, title: 'a thing', isCloseAffordance: true }]).then(handle => {
 			assert.equal(handle, 42);
 		});
 	});
@@ -33,17 +38,21 @@ suite('ExtHostMessageService', function () {
 			show(sev: number, m: { message; actions: Action[] }) {
 				actions = m.actions;
 			}
+		}, <any>{
+			choose() {
+				return Promise.as(undefined);
+			}
 		});
 
 		// default close action
-		service.$showMessage(1, '', [{ title: 'a thing', isCloseAffordance: false, handle: 0 }]);
+		service.$showMessage(1, '', {}, [{ title: 'a thing', isCloseAffordance: false, handle: 0 }]);
 		assert.equal(actions.length, 2);
 		let [first, second] = actions;
 		assert.equal(first.label, 'a thing');
 		assert.equal(second.label, 'Close');
 
 		// override close action
-		service.$showMessage(1, '', [{ title: 'a thing', isCloseAffordance: true, handle: 0 }]);
+		service.$showMessage(1, '', {}, [{ title: 'a thing', isCloseAffordance: true, handle: 0 }]);
 		assert.equal(actions.length, 1);
 		first = actions[0];
 		assert.equal(first.label, 'a thing');
@@ -61,9 +70,13 @@ suite('ExtHostMessageService', function () {
 					c += 1;
 				};
 			}
+		}, <any>{
+			choose() {
+				return Promise.as(undefined);
+			}
 		});
 
-		service.$showMessage(1, '', [{ title: 'a thing', isCloseAffordance: true, handle: 0 }]);
+		service.$showMessage(1, '', {}, [{ title: 'a thing', isCloseAffordance: true, handle: 0 }]);
 		assert.equal(actions.length, 1);
 
 		actions[0].run();
