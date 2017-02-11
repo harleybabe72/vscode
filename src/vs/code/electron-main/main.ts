@@ -56,6 +56,7 @@ import { resolveCommonProperties } from 'vs/platform/telemetry/node/commonProper
 import { getDelayedChannel } from 'vs/base/parts/ipc/common/ipc';
 import product from 'vs/platform/node/product';
 import pkg from 'vs/platform/node/package';
+import URI from 'vs/base/common/uri';
 import * as fs from 'original-fs';
 
 
@@ -263,6 +264,10 @@ function main(accessor: ServicesAccessor, mainIpcServer: Server, userEnv: platfo
 
 		// Install Menu
 		instantiationService2.createInstance(VSCodeMenu);
+
+		// Install Devtools extension
+		const devtoolsPath = URI.parse(require.toUrl('vs/devtools/browser')).fsPath;
+		BrowserWindow.addDevToolsExtension(devtoolsPath);
 	});
 }
 
