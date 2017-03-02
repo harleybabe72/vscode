@@ -19,7 +19,6 @@ exports.collectModules= function() {
 	return [
 		createModuleDescription('vs/code/electron-main/main', []),
 		createModuleDescription('vs/code/node/cli', []),
-		createModuleDescription('vs/code/node/cliProcessMain', ['vs/code/node/cli']),
-		createModuleDescription('vs/code/node/sharedProcessMain', [])
+		createModuleDescription('vs/code/node/cliProcessMain', ['vs/code/node/cli'])
 	];
 };

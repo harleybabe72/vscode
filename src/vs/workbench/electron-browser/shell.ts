@@ -75,8 +75,6 @@ import { IModeService } from 'vs/editor/common/services/modeService';
 import { IUntitledEditorService, UntitledEditorService } from 'vs/workbench/services/untitled/common/untitledEditorService';
 import { CrashReporter } from 'vs/workbench/electron-browser/crashReporter';
 import { NodeCachedDataManager } from 'vs/workbench/electron-browser/nodeCachedDataManager';
-import { getDelayedChannel } from 'vs/base/parts/ipc/common/ipc';
-import { connect as connectNet } from 'vs/base/parts/ipc/node/ipc.net';
 import { Client as ElectronIPCClient } from 'vs/base/parts/ipc/electron-browser/ipc.electron-browser';
 import { IExtensionManagementChannel, ExtensionManagementChannelClient } from 'vs/platform/extensionManagement/common/extensionManagementIpc';
 import { IExtensionManagementService, IExtensionEnablementService } from 'vs/platform/extensionManagement/common/extensionManagement';
@@ -87,7 +85,7 @@ import { URLChannelClient } from 'vs/platform/url/common/urlIpc';
 import { IURLService } from 'vs/platform/url/common/url';
 import { IBackupService } from 'vs/platform/backup/common/backup';
 import { BackupChannelClient } from 'vs/platform/backup/common/backupIpc';
-import { ReloadWindowAction, ReportPerformanceIssueAction } from 'vs/workbench/electron-browser/actions';
+import { ReportPerformanceIssueAction } from 'vs/workbench/electron-browser/actions';
 import { ExtensionHostProcessWorker } from 'vs/workbench/electron-browser/extensionHost';
 import { ITimerService } from 'vs/workbench/services/timer/common/timerService';
 import { remote } from 'electron';
@@ -285,28 +283,15 @@ export class WorkbenchShell {
 		this.windowIPCService = instantiationService.createInstance<IWindowIPCService>(WindowIPCService);
 		serviceCollection.set(IWindowIPCService, this.windowIPCService);
 
-		const mainProcessClient = new ElectronIPCClient(String(`window${currentWindow.id}`));
-		disposables.add(mainProcessClient);
+		// or maybe `window${currentWindow.id}`
+		const electronIpcClient = new ElectronIPCClient(`window:${this.windowIPCService.getWindowId()}`);
+		disposables.add(electronIpcClient);
 
-		const windowsChannel = mainProcessClient.getChannel('windows');
+		const windowsChannel = electronIpcClient.getChannel('windows');
 		this.windowsService = new WindowsChannelClient(windowsChannel);
 		serviceCollection.set(IWindowsService, this.windowsService);
 
 		serviceCollection.set(IWindowService, new SyncDescriptor(WindowService, this.windowIPCService.getWindowId()));
-
-		const sharedProcess = connectNet(this.environmentService.sharedIPCHandle, `window:${this.windowIPCService.getWindowId()}`);
-		sharedProcess.done(client => {
-
-			// Choice channel
-			client.registerChannel('choice', instantiationService.createInstance(ChoiceChannel));
-
-			client.onClose(() => {
-				this.messageService.show(Severity.Error, {
-					message: nls.localize('sharedProcessCrashed', "The shared process terminated unexpectedly. Please reload the window to recover."),
-					actions: [instantiationService.createInstance(ReloadWindowAction, ReloadWindowAction.ID, ReloadWindowAction.LABEL)]
-				});
-			});
-		}, errors.onUnexpectedError);
 
 		// Storage Sevice
 		const disableWorkspaceStorage = this.environmentService.extensionTestsPath || (!this.contextService.hasWorkspace() && !this.environmentService.isExtensionDevelopment); // without workspace or in any extension test, we use inMemory storage unless we develop an extension where we want to preserve state
@@ -315,7 +300,7 @@ export class WorkbenchShell {
 
 		// Telemetry
 		if (this.environmentService.isBuilt && !this.environmentService.isExtensionDevelopment && !!product.enableTelemetry) {
-			const channel = getDelayedChannel<ITelemetryAppenderChannel>(sharedProcess.then(c => c.getChannel('telemetryAppender')));
+			const channel = electronIpcClient.getChannel<ITelemetryAppenderChannel>('telemetryAppender');
 			const commit = product.commit;
 			const version = pkg.version;
 
@@ -350,13 +335,14 @@ export class WorkbenchShell {
 		this.messageService = instantiationService.createInstance(MessageService, container);
 		serviceCollection.set(IMessageService, this.messageService);
 		serviceCollection.set(IChoiceService, this.messageService);
+		electronIpcClient.registerChannel('choice', new ChoiceChannel(this.messageService));
 
 		const lifecycleService = instantiationService.createInstance(LifecycleService);
 		this.toUnbind.push(lifecycleService.onShutdown(reason => disposables.dispose()));
 		serviceCollection.set(ILifecycleService, lifecycleService);
 		disposables.add(lifecycleTelemetry(this.telemetryService, lifecycleService));
 
-		const extensionManagementChannel = getDelayedChannel<IExtensionManagementChannel>(sharedProcess.then(c => c.getChannel('extensions')));
+		const extensionManagementChannel = electronIpcClient.getChannel<IExtensionManagementChannel>('extensions');
 		serviceCollection.set(IExtensionManagementService, new SyncDescriptor(ExtensionManagementChannelClient, extensionManagementChannel));
 
 		const extensionEnablementService = instantiationService.createInstance(ExtensionEnablementService);
@@ -403,13 +389,13 @@ export class WorkbenchShell {
 
 		serviceCollection.set(IIntegrityService, new SyncDescriptor(IntegrityServiceImpl));
 
-		const updateChannel = mainProcessClient.getChannel('update');
+		const updateChannel = electronIpcClient.getChannel('update');
 		serviceCollection.set(IUpdateService, new SyncDescriptor(UpdateChannelClient, updateChannel));
 
-		const urlChannel = mainProcessClient.getChannel('url');
+		const urlChannel = electronIpcClient.getChannel('url');
 		serviceCollection.set(IURLService, new SyncDescriptor(URLChannelClient, urlChannel, this.windowIPCService.getWindowId()));
 
-		const backupChannel = mainProcessClient.getChannel('backup');
+		const backupChannel = electronIpcClient.getChannel('backup');
 		serviceCollection.set(IBackupService, new SyncDescriptor(BackupChannelClient, backupChannel));
 
 		return [instantiationService, serviceCollection];

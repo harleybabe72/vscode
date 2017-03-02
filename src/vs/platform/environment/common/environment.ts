@@ -79,7 +79,6 @@ export interface IEnvironmentService {
 	profileStartup: { prefix: string, dir: string } | undefined;
 
 	mainIPCHandle: string;
-	sharedIPCHandle: string;
 
 	nodeCachedDataDir: string;
 }

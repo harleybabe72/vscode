@@ -129,9 +129,6 @@ export class EnvironmentService implements IEnvironmentService {
 	get mainIPCHandle(): string { return getIPCHandle(this.userDataPath, 'main'); }
 
 	@memoize
-	get sharedIPCHandle(): string { return getIPCHandle(this.userDataPath, 'shared'); }
-
-	@memoize
 	get nodeCachedDataDir(): string { return path.join(this.userDataPath, 'CachedData'); }
 
 	constructor(private _args: ParsedArgs, private _execPath: string) { }
