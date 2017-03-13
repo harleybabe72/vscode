@@ -19,6 +19,7 @@ export class Menu implements IMenu {
 	private _menuGroups: MenuItemGroup[] = [];
 	private _disposables: IDisposable[] = [];
 	private _onDidChange = new Emitter<IMenu>();
+	private _cache: MenuItemGroup[] = null;
 
 	constructor(
 		private id: MenuId,
@@ -50,6 +51,7 @@ export class Menu implements IMenu {
 			this._disposables.push(this._contextKeyService.onDidChangeContext(keys => {
 				for (let k of keys) {
 					if (keysFilter.has(k)) {
+						this._cache = null;
 						this._onDidChange.fire();
 						return;
 					}
@@ -70,22 +72,24 @@ export class Menu implements IMenu {
 	}
 
 	getActions(arg?: any): [string, MenuItemAction[]][] {
-		const result: [string, MenuItemAction[]][] = [];
-		for (let group of this._menuGroups) {
-			const [id, items] = group;
-			const activeActions: MenuItemAction[] = [];
-			for (const item of items) {
-				if (this._contextKeyService.contextMatchesRules(item.when)) {
-					const action = new MenuItemAction(item.command, item.alt, arg, this._commandService);
-					action.order = item.order; //TODO@Ben order is menu item property, not an action property
-					activeActions.push(action);
-				}
-			}
-			if (activeActions.length > 0) {
-				result.push([id, activeActions]);
-			}
+		if (!this._cache) {
+			this._cache = this._menuGroups
+				.map(([id, items]) => [id, items.filter(item => this._contextKeyService.contextMatchesRules(item.when))], []) as MenuItemGroup[];
 		}
-		return result;
+
+		return this._cache.reduce((result, [id, items]) => {
+			if (items.length === 0) {
+				return result;
+			}
+
+			const actions = items.map(item => {
+				const action = new MenuItemAction(item.command, item.alt, arg, this._commandService);
+				action.order = item.order; //TODO@Ben order is menu item property, not an action property
+				return action;
+			});
+
+			return [...result, [id, actions]];
+		}, []);
 	}
 
 	private static _fillInKbExprKeys(exp: ContextKeyExpr, set: Set<string>): void {
