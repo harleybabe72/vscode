@@ -31,6 +31,9 @@ STEP "Install dependencies"
 STEP "Mix in repository from vscode-distro"
 npm run gulp -- mixin
 
+STEP "Get Electron"
+npm run gulp -- "electron-$ARCH"
+
 STEP "Build minified"
 npm run gulp -- --max_old_space_size=4096 "vscode-linux-$ARCH-min"
 
