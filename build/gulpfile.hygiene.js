@@ -9,6 +9,7 @@ const gulp = require('gulp');
 const filter = require('gulp-filter');
 const es = require('event-stream');
 const gulptslint = require('gulp-tslint');
+const gulpeslint = require('gulp-eslint');
 const tsfmt = require('typescript-formatter');
 const tslint = require('tslint');
 
@@ -95,6 +96,11 @@ const copyrightFilter = [
 	'!extensions/html/server/src/modes/typescript/*'
 ];
 
+const eslintFilter = [
+	'src/**/*.js',
+	'!**/test/**'
+];
+
 const tslintFilter = [
 	'src/**/*.ts',
 	'extensions/**/*.ts',
@@ -123,6 +129,14 @@ function reportFailures(failures) {
 		console.error(`${name}:${line + 1}:${character + 1}:${failure.failure}`);
 	});
 }
+
+gulp.task('eslint', () => {
+	return gulp.src(all, { base: '.' })
+		.pipe(filter(eslintFilter))
+		.pipe(gulpeslint('.eslintrc'))
+		.pipe(gulpeslint.format())
+		.pipe(gulpeslint.failAfterError());
+});
 
 gulp.task('tslint', () => {
 	const options = { summarizeFailureOutput: true };
